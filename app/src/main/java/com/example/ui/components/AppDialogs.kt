@@ -5021,8 +5021,7 @@ fun WarungDetailDialog(
     warung: WarungEntity,
     onDismiss: () -> Unit,
     onWriteOff: () -> Unit,
-    onManageCustomPrices: () -> Unit = {
-},
+    onManageCustomPrices: () -> Unit = {},
     onViewStatistics: () -> Unit = {}
 ) {
     val lang = LocalAppLanguage.current
@@ -5034,20 +5033,24 @@ fun WarungDetailDialog(
 // 11B. OUTLET COMPREHENSIVE STATISTICS & PERFORMANCE ANALYTICS DIALOG
 data class ProductSalesStat(val name: String, val pcs: Int, val revenue: Double)
 
-enum class OutletTxFilter(val label: String) {
-    SEMUA("Semua Transaksi"),
-    TITIP_BARU("Drop Konsinyasi"),
-    TARIK_SETTLE("Tarik & Settle"),
-    LUNAS("Lunas"),
-    PIUTANG_BON("Ada Bon / Piutang")
+enum class OutletTxFilter(val idLabel: String, val enLabel: String) {
+    SEMUA("Semua Transaksi", "All Transactions"),
+    TITIP_BARU("Drop Konsinyasi", "Consignment Drop"),
+    TARIK_SETTLE("Tarik & Settle", "Return & Settle"),
+    LUNAS("Lunas", "Paid in Full"),
+    PIUTANG_BON("Ada Bon / Piutang", "Has Credit / Debt");
+
+    fun getLabel(lang: String): String = if (lang == "EN") enLabel else idLabel
 }
 
-enum class OutletTxSort(val label: String) {
-    TERBARU("Terbaru (Waktu)"),
-    TERLAMA("Terlama"),
-    NILAI_TERBESAR("Nilai Omset Terbesar"),
-    PCS_TERBANYAK("Qty Laku Terbanyak"),
-    RETUR_BS_TERBANYAK("Retur Terbanyak")
+enum class OutletTxSort(val idLabel: String, val enLabel: String) {
+    TERBARU("Terbaru (Waktu)", "Newest (Time)"),
+    TERLAMA("Terlama", "Oldest"),
+    NILAI_TERBESAR("Nilai Omset Terbesar", "Highest Revenue"),
+    PCS_TERBANYAK("Qty Laku Terbanyak", "Highest Sold Qty"),
+    RETUR_BS_TERBANYAK("Retur Terbanyak", "Highest Returns");
+
+    fun getLabel(lang: String): String = if (lang == "EN") enLabel else idLabel
 }
 
 @Composable
@@ -5060,8 +5063,7 @@ fun OutletStatisticsDialog(
     onTitipBaru: () -> Unit,
     onTarikSisa: () -> Unit,
     onManageCustomPrices: () -> Unit,
-    onAiRecommendation: () -> Unit = {
-}
+    onAiRecommendation: () -> Unit = {}
 ) {
     val lang = LocalAppLanguage.current
 
@@ -5206,7 +5208,7 @@ fun OutletStatisticsDialog(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 Text(
-                                    text = "Pemilik: ${warung.namaPemilik.ifBlank { "-" }}",
+                                    text = "${tr("Pemilik", "Owner", lang)}: ${warung.namaPemilik.ifBlank { "-" }}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Slate600
                                 )
@@ -5354,7 +5356,7 @@ fun OutletStatisticsDialog(
                                                                 Icon(Icons.Default.Check, contentDescription = null, tint = Slate900, modifier = Modifier.size(14.dp))
                                                                 Spacer(modifier = Modifier.width(8.dp))
                                                             }
-                                                            Text(sortOption.label, fontSize = 12.sp, fontWeight = if (selectedSort == sortOption) FontWeight.Bold else FontWeight.Normal)
+                                                            Text(sortOption.getLabel(lang), fontSize = 12.sp, fontWeight = if (selectedSort == sortOption) FontWeight.Bold else FontWeight.Normal)
                                                         }
                                                     },
                                                     onClick = {
@@ -5379,7 +5381,7 @@ fun OutletStatisticsDialog(
                                         FilterChip(
                                             selected = isSelected,
                                             onClick = { selectedFilter = filterOpt },
-                                            label = { Text(filterOpt.label, fontSize = 11.sp) },
+                                            label = { Text(filterOpt.getLabel(lang), fontSize = 11.sp) },
                                             shape = RoundedCornerShape(8.dp),
                                             colors = FilterChipDefaults.filterChipColors(
                                                 selectedContainerColor = Slate900,
@@ -5449,7 +5451,7 @@ fun OutletStatisticsDialog(
                                                                 border = androidx.compose.foundation.BorderStroke(1.dp, if (isTitip) BlueBorder else EmeraldBorder)
                                                             ) {
                                                                 Text(
-                                                                    text = if (isTitip) "DROP TITIP" else "TARIK & SETTLE",
+                                                                    text = if (isTitip) tr("DROP TITIP", "DROP CONSIGN", lang) else tr("TARIK & SETTLE", "RETURN & SETTLE", lang),
                                                                     color = if (isTitip) BlueAccent else EmeraldText,
                                                                     fontSize = 9.sp,
                                                                     fontWeight = FontWeight.Bold,
@@ -5469,7 +5471,7 @@ fun OutletStatisticsDialog(
                                                             color = if (isLunas) EmeraldSurface else AmberSurface
                                                         ) {
                                                             Text(
-                                                                text = if (isLunas) "Lunas" else "Ada Bon",
+                                                                text = if (isLunas) tr("Lunas", "Paid", lang) else tr("Ada Bon", "Has Debt", lang),
                                                                 fontSize = 9.sp,
                                                                 fontWeight = FontWeight.Bold,
                                                                 color = if (isLunas) EmeraldText else AmberText,
@@ -5493,7 +5495,7 @@ fun OutletStatisticsDialog(
                                                                 color = Slate900
                                                             )
                                                             Text(
-                                                                text = if (isTitip) "Jumlah Dititipkan: $qtyDititip $satuanKecil" else "Laku: ${tx.pcsLaku} $satuanKecil • Retur Ditarik: ${tx.bsDitarikPcs} $satuanKecil",
+                                                                text = if (isTitip) "${tr("Jumlah Dititipkan", "Consigned Qty", lang)}: $qtyDititip $satuanKecil" else "${tr("Laku", "Sold", lang)}: ${tx.pcsLaku} $satuanKecil • ${tr("Retur Ditarik", "Returns", lang)}: ${tx.bsDitarikPcs} $satuanKecil",
                                                                 fontSize = 11.sp,
                                                                 color = Slate600
                                                             )
@@ -5509,7 +5511,7 @@ fun OutletStatisticsDialog(
                                                                     color = Slate900
                                                                 )
                                                                 Text(
-                                                                    text = "Drop Konsinyasi",
+                                                                    text = tr("Drop Konsinyasi", "Consignment Drop", lang),
                                                                     fontSize = 10.sp,
                                                                     color = BlueAccent,
                                                                     fontWeight = FontWeight.SemiBold
@@ -5522,7 +5524,7 @@ fun OutletStatisticsDialog(
                                                                     color = Slate900
                                                                 )
                                                                 Text(
-                                                                    text = "Bayar: ${SfaViewModel.formatRupiah(tx.uangDiterima)}",
+                                                                    text = "${tr("Bayar", "Paid", lang)}: ${SfaViewModel.formatRupiah(tx.uangDiterima)}",
                                                                     fontSize = 10.sp,
                                                                     color = if (isLunas) EmeraldSuccess else AmberWarning
                                                                 )
@@ -5532,7 +5534,7 @@ fun OutletStatisticsDialog(
 
                                                     if (tx.catatan.isNotBlank()) {
                                                         Text(
-                                                            text = "Catatan: ${tx.catatan}",
+                                                            text = "${tr("Catatan", "Notes", lang)}: ${tx.catatan}",
                                                             fontSize = 10.sp,
                                                             color = Slate500,
                                                             maxLines = 2,
@@ -5551,7 +5553,7 @@ fun OutletStatisticsDialog(
                                                             color = Slate400
                                                         )
                                                         Text(
-                                                            text = "Lihat Detail Struk >",
+                                                            text = tr("Lihat Detail Struk >", "View Receipt Detail >", lang),
                                                             fontSize = 10.sp,
                                                             fontWeight = FontWeight.Bold,
                                                             color = BlueAccent
@@ -5587,12 +5589,12 @@ fun OutletStatisticsDialog(
                                     ) {
                                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(
-                                                text = "${warung.kategoriWarung} • Urutan #${warung.urutanKunjungan}",
+                                                text = "${warung.kategoriWarung} • ${tr("Urutan", "Order", lang)} #${warung.urutanKunjungan}",
                                                 fontSize = 11.sp,
                                                 color = Slate600
                                             )
                                             Text(
-                                                text = "Kunjungan Terakhir:",
+                                                text = tr("Kunjungan Terakhir:", "Last Visit:", lang),
                                                 fontSize = 10.sp,
                                                 color = Slate500
                                             )
@@ -5609,11 +5611,11 @@ fun OutletStatisticsDialog(
                                         ) {
                                             Text(
                                                 text = when {
-                                                    daysSinceVisit == 0 -> "Hari ini"
-                                                    daysSinceVisit >= 900 -> "Belum Pernah"
-                                                    daysSinceVisit >= 14 -> "⚠️ $daysSinceVisit hari lalu (Kritis)"
-                                                    daysSinceVisit >= 7 -> "⚠️ $daysSinceVisit hari lalu (Tempo)"
-                                                    else -> "$daysSinceVisit hari lalu"
+                                                    daysSinceVisit == 0 -> tr("Hari ini", "Today", lang)
+                                                    daysSinceVisit >= 900 -> tr("Belum Pernah", "Never", lang)
+                                                    daysSinceVisit >= 14 -> "⚠️ $daysSinceVisit ${tr("hari lalu (Kritis)", "days ago (Critical)", lang)}"
+                                                    daysSinceVisit >= 7 -> "⚠️ $daysSinceVisit ${tr("hari lalu (Tempo)", "days ago (Due)", lang)}"
+                                                    else -> "$daysSinceVisit ${tr("hari lalu", "days ago", lang)}"
                                                 },
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
@@ -5642,8 +5644,8 @@ fun OutletStatisticsDialog(
                                     Surface(shape = RoundedCornerShape(10.dp), color = Slate100, modifier = Modifier.weight(1f)) {
                                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(tr("TOTAL LAKU", "TOTAL SOLD", lang), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Slate500)
-                                            Text("$totalPcsSold Unit", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Slate900)
-                                            Text(tr(tr("$totalTransactionsCount x Kunjungan", "$totalTransactionsCount x Visits", lang), "$totalTransactionsCount x Visits", lang), fontSize = 9.sp, color = Slate500)
+                                            Text("$totalPcsSold ${tr("Unit", "Units", lang)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Slate900)
+                                            Text(tr("$totalTransactionsCount x Kunjungan", "$totalTransactionsCount x Visits", lang), fontSize = 9.sp, color = Slate500)
                                         }
                                     }
                                 }
@@ -5653,14 +5655,14 @@ fun OutletStatisticsDialog(
                                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(tr("RATA-RATA / KUNJUNGAN", "AVERAGE / VISIT", lang), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Slate500)
                                             Text(SfaViewModel.formatRupiah(avgSalesPerVisit), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EmeraldSuccess)
-                                            Text(String.format(java.util.Locale.US, "%.1f unit / visit", avgPcsPerVisit), fontSize = 9.sp, color = Slate500)
+                                            Text(String.format(java.util.Locale.US, "%.1f %s", avgPcsPerVisit, tr("unit / visit", "units / visit", lang)), fontSize = 9.sp, color = Slate500)
                                         }
                                     }
                                     Surface(shape = RoundedCornerShape(10.dp), color = Slate50, border = androidx.compose.foundation.BorderStroke(1.dp, Slate200), modifier = Modifier.weight(1f)) {
                                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(tr("KAS TERKUMPUL", "CASH COLLECTED", lang), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Slate500)
                                             Text(SfaViewModel.formatRupiah(totalCashCollected), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Slate900)
-                                            Text(tr(tr("${collectionRatePercent.toInt()}% Terbayar Tunai", "${collectionRatePercent.toInt()}% Paid Cash", lang), "${collectionRatePercent.toInt()}% Paid in Cash", lang), fontSize = 9.sp, color = Slate500)
+                                            Text(tr("${collectionRatePercent.toInt()}% Terbayar Tunai", "${collectionRatePercent.toInt()}% Paid in Cash", lang), fontSize = 9.sp, color = Slate500)
                                         }
                                     }
                                 }
@@ -5680,17 +5682,17 @@ fun OutletStatisticsDialog(
                                                 Text(tr("Smart Restock Forecast", "Smart Restock Forecast", lang), fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF1E40AF))
                                             }
                                             Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFDBEAFE)) {
-                                                Text(String.format(java.util.Locale.US, "%.1f unit/hari", dailyVelocity), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                                                Text(String.format(java.util.Locale.US, "%.1f %s", dailyVelocity, tr("unit/hari", "units/day", lang)), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
                                             }
                                         }
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                             Column {
                                                 Text(tr("Disarankan Titip (7 Hari):", "Recommended Drop (7 Days):", lang), fontSize = 10.sp, color = Slate700)
-                                                Text("$suggestedRestock7Days Unit", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E3A8A))
+                                                Text("$suggestedRestock7Days ${tr("Unit", "Units", lang)}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E3A8A))
                                             }
                                             Column(horizontalAlignment = Alignment.End) {
                                                 Text(tr("Sisa Titipan Fisik:", "Remaining Consignment Stock:", lang), fontSize = 10.sp, color = Slate700)
-                                                Text("${warung.stokTitipanPcs} Unit (${if (estimatedDaysLeft > 0) "cukup ~$estimatedDaysLeft hari" else "stok menipis"})", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (warung.stokTitipanPcs <= 5) RoseDanger else Slate900)
+                                                Text("${warung.stokTitipanPcs} ${tr("Unit", "Units", lang)} (${if (estimatedDaysLeft > 0) tr("cukup ~$estimatedDaysLeft hari", "~$estimatedDaysLeft days left", lang) else tr("stok menipis", "low stock", lang)})", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (warung.stokTitipanPcs <= 5) RoseDanger else Slate900)
                                             }
                                         }
                                     }
@@ -5708,7 +5710,7 @@ fun OutletStatisticsDialog(
                                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(tr("SALDO BON AKTIF", "ACTIVE CREDIT BALANCE", lang), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Slate600)
                                             Text(SfaViewModel.formatRupiah(warung.saldoPiutang), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (warung.saldoPiutang > 0) AmberWarning else EmeraldSuccess)
-                                            Text(tr("Limit: ${SfaViewModel.formatRupiah(warung.limitHutangMaksimal)}", "Limit: ${SfaViewModel.formatRupiah(warung.limitHutangMaksimal)}", lang), fontSize = 9.sp, color = Slate500)
+                                            Text("${tr("Limit", "Limit", lang)}: ${SfaViewModel.formatRupiah(warung.limitHutangMaksimal)}", fontSize = 9.sp, color = Slate500)
                                         }
                                     }
                                     Surface(
@@ -5719,7 +5721,7 @@ fun OutletStatisticsDialog(
                                     ) {
                                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(tr("PERSENTASE RETUR", "RETURN GOODS RATE", lang), fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Slate600)
-                                            Text(String.format(java.util.Locale.US, "%.1f%% Retur", bsRatioPercent), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (bsRatioPercent > 5.0) RoseDanger else EmeraldSuccess)
+                                            Text(String.format(java.util.Locale.US, "%.1f%% %s", bsRatioPercent, tr("Retur", "Returns", lang)), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (bsRatioPercent > 5.0) RoseDanger else EmeraldSuccess)
                                             Text(tr("$totalBsPcs Unit Pernah Retur", "$totalBsPcs Units Ever Returned", lang), fontSize = 9.sp, color = Slate500)
                                         }
                                     }
@@ -5741,7 +5743,7 @@ fun OutletStatisticsDialog(
                                                 Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                                         Text("#${idx + 1} ${item.name}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate900, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                        Text("${item.pcs} Unit (${SfaViewModel.formatRupiah(item.revenue)})", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
+                                                        Text("${item.pcs} ${tr("Unit", "Units", lang)} (${SfaViewModel.formatRupiah(item.revenue)})", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Slate800)
                                                     }
                                                     LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth().height(4.dp).clip(CircleShape), color = if (idx == 0) AmberWarning else Slate700, trackColor = Slate200)
                                                 }
@@ -5821,7 +5823,7 @@ fun OutletStatisticsDialog(
                                         }
                                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                                             Text(tr("Status Outlet:", "Outlet Status:", lang), fontSize = 11.sp, color = Slate600)
-                                            Text(warung.status, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (warung.status == "Blacklist") RoseDanger else EmeraldSuccess)
+                                            Text(if (warung.status == "Blacklist") tr("Blacklist", "Blacklist", lang) else tr(warung.status, warung.status, lang), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (warung.status == "Blacklist") RoseDanger else EmeraldSuccess)
                                         }
                                     }
                                 }
@@ -5841,7 +5843,7 @@ fun OutletStatisticsDialog(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                                         ) {
                                             Icon(Icons.Default.LocationOn, contentDescription = null, tint = Slate600, modifier = Modifier.size(16.dp))
-                                            Text(warung.alamatLengkap.ifEmpty { "Belum ada alamat tertulis" }, fontSize = 11.sp, color = Slate800)
+                                            Text(warung.alamatLengkap.ifEmpty { tr("Belum ada alamat tertulis", "No written address yet", lang) }, fontSize = 11.sp, color = Slate800)
                                         }
 
                                         Surface(
@@ -5883,7 +5885,7 @@ fun OutletStatisticsDialog(
                                         }
 
                                         Text(
-                                            text = "Koordinat: Lat ${String.format(Locale.US, "%.5f", warung.latitude)}, Lng ${String.format(Locale.US, "%.5f", warung.longitude)} (±${warung.akurasiGpsMeter}m)",
+                                            text = "${tr("Koordinat", "Coordinates", lang)}: Lat ${String.format(Locale.US, "%.5f", warung.latitude)}, Lng ${String.format(Locale.US, "%.5f", warung.longitude)} (±${warung.akurasiGpsMeter}m)",
                                             fontSize = 10.sp,
                                             color = Slate500
                                         )
@@ -5990,7 +5992,7 @@ fun OutletStatisticsDialog(
 fun GpsToolDialog(onDismiss: () -> Unit) {
     val lang = LocalAppLanguage.current
 
-val context = LocalContext.current
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var currentLoc by remember { mutableStateOf(com.example.util.LocationHelper.getInstantLocation(context)) }
     var isRefreshing by remember { mutableStateOf(false) }
@@ -5999,20 +6001,20 @@ val context = LocalContext.current
             if (currentLoc.isAvailable) {
                 com.example.util.LocationHelper.reverseGeocode(context, currentLoc.latitude, currentLoc.longitude)
             } else {
-                "Sensor GPS aktif (mencari sinyal satelit...)"
+                tr("Sensor GPS aktif (mencari sinyal satelit...)", "GPS sensor active (searching satellite signal...)", lang)
             }
         )
     }
 
     val refreshLocation = {
         isRefreshing = true
-        addressText = "📡 Mencari dan mengunci satelit GPS GNSS (Mode Offline)..."
+        addressText = tr("📡 Mencari dan mengunci satelit GPS GNSS (Mode Offline)...", "📡 Searching and locking GPS GNSS satellites (Offline Mode)...", lang)
         coroutineScope.launch(Dispatchers.IO) {
             val freshLoc = com.example.util.LocationHelper.acquireFreshSatelliteFix(context, maxTimeoutMs = 12000L, targetAccuracyMeters = 20f)
             val addr = if (freshLoc.isAvailable) {
                 com.example.util.LocationHelper.reverseGeocode(context, freshLoc.latitude, freshLoc.longitude)
             } else {
-                "Sensor GPS aktif (mencari sinyal satelit di ruang terbuka...)"
+                tr("Sensor GPS aktif (mencari sinyal satelit di ruang terbuka...)", "GPS sensor active (searching satellite signal in open sky...)", lang)
             }
             withContext(Dispatchers.Main) {
                 currentLoc = freshLoc
@@ -6072,7 +6074,7 @@ val context = LocalContext.current
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(tr("Akurasi Sensor:", "Sensor Accuracy:", lang), fontSize = 11.sp, color = Slate600, fontWeight = FontWeight.Medium)
                             Text(
-                                text = if (currentLoc.isAvailable) "${currentLoc.accuracyMeter.toInt().coerceAtLeast(3)} meter (Akurat)" else "Mencari Sinyal",
+                                text = if (currentLoc.isAvailable) "${currentLoc.accuracyMeter.toInt().coerceAtLeast(3)} ${tr("meter (Akurat)", "meters (Accurate)", lang)}" else tr("Mencari Sinyal", "Searching Signal", lang),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (currentLoc.isAvailable) EmeraldSuccess else AmberWarning
@@ -6080,7 +6082,7 @@ val context = LocalContext.current
                         }
                         HorizontalDivider(color = Slate200)
                         Text(
-                            text = "Wilayah / Alamat: $addressText",
+                            text = "${tr("Wilayah / Alamat", "Area / Address", lang)}: $addressText",
                             fontSize = 11.sp,
                             color = Slate700
                         )
@@ -6168,7 +6170,7 @@ var namaSalesman by remember { mutableStateOf(currentProfile?.namaSalesman ?: ""
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, tint = Slate900, modifier = Modifier.size(24.dp))
                         Text(
-                            text = if (currentProfile == null) "Registrasi Akun Sales" else "Profil & Identitas Sales",
+                            text = if (currentProfile == null) tr("Registrasi Akun Sales", "Sales Account Registration", lang) else tr("Profil & Identitas Sales", "Sales Profile & Identity", lang),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -6179,7 +6181,7 @@ var namaSalesman by remember { mutableStateOf(currentProfile?.namaSalesman ?: ""
                 }
 
                 Text(
-                    text = "Identitas ini disimpan lokal di HP Anda dan otomatis dicetak pada kepala struk nota transaksi.",
+                    text = tr("Identitas ini disimpan lokal di HP Anda dan otomatis dicetak pada kepala struk nota transaksi.", "This identity is stored locally on your device and automatically printed on the transaction receipt header.", lang),
                     fontSize = 11.sp,
                     color = Slate600
                 )
@@ -6335,7 +6337,7 @@ var editingProduct by remember { mutableStateOf<ProductEntity?>(null) }
                 ) {
                     Column {
                         Text(
-                            text = "Harga Khusus Toko",
+                            text = tr("Harga Khusus Toko", "Store Special Prices", lang),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -6351,7 +6353,7 @@ var editingProduct by remember { mutableStateOf<ProductEntity?>(null) }
                 }
 
                 Text(
-                    text = "Atur harga jual khusus untuk toko ini jika berbeda dari harga standar katalog.",
+                    text = tr("Atur harga jual khusus untuk toko ini jika berbeda dari harga standar katalog.", "Set special selling prices for this store if different from standard catalog prices.", lang),
                     fontSize = 11.sp,
                     color = Slate600
                 )
@@ -6368,7 +6370,7 @@ var editingProduct by remember { mutableStateOf<ProductEntity?>(null) }
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(tr(tr("Atur Harga: ${p.nama}", "Set Price: ${p.nama}", lang), "Set Price: ${p.nama}", lang), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(tr("Atur Harga: ${p.nama}", "Set Price: ${p.nama}", lang), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             Text(tr("Harga Katalog Standar: ${SfaViewModel.formatRupiah(p.hargaJualDefault)}/Pcs", "Standard Catalog Price: ${SfaViewModel.formatRupiah(p.hargaJualDefault)}/Pcs", lang), fontSize = 11.sp, color = Slate600)
 
                             OutlinedTextField(
@@ -6466,7 +6468,7 @@ var editingProduct by remember { mutableStateOf<ProductEntity?>(null) }
                                 ) {
                                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text(if (custom != null) "Ubah" else "Set Khusus", fontSize = 11.sp)
+                                    Text(if (custom != null) tr("Ubah", "Edit", lang) else tr("Set Khusus", "Set Custom", lang), fontSize = 11.sp)
                                 }
                             }
                         }
@@ -6633,7 +6635,7 @@ val context = LocalContext.current
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Default.CloudUpload, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(24.dp))
                         Text(
-                            text = "Ekspor Cadangan & Migrasi HP",
+                            text = tr("Ekspor Cadangan & Migrasi HP", "Backup Export & Phone Migration", lang),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -6814,7 +6816,7 @@ val context = LocalContext.current
                                     context = context,
                                     file = zipResult!!.zipFile,
                                     mimeType = "application/zip",
-                                    chooserTitle = "Kirim Paket Migrasi HP SFA (.ZIP)"
+                                    chooserTitle = tr("Kirim Paket Migrasi HP SFA (.ZIP)", "Send SFA Phone Migration Package (.ZIP)", lang)
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -6829,7 +6831,7 @@ val context = LocalContext.current
                 } else {
                     // --- TAB 2: BERKAS CADANGAN JSON MODULAR ---
                     Text(
-                        text = "Pilih entitas data yang ingin disertakan ke file cadangan JSON:",
+                        text = tr("Pilih entitas data yang ingin disertakan ke file cadangan JSON:", "Select data entities to include in the JSON backup file:", lang),
                         fontSize = 11.sp,
                         color = Slate600
                     )
@@ -7020,7 +7022,7 @@ val context = LocalContext.current
                                             context = context,
                                             file = f,
                                             mimeType = "application/json",
-                                            chooserTitle = "Bagikan Berkas Cadangan JSON"
+                                            chooserTitle = tr("Bagikan Berkas Cadangan JSON", "Share JSON Backup File", lang)
                                         )
                                     }
                                 },
@@ -7046,7 +7048,7 @@ val context = LocalContext.current
                             ) {
                                 Icon(if (copied) Icons.Default.Check else Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (copied) "Tersalin" else "Salin Teks", fontSize = 10.sp)
+                                Text(if (copied) tr("Tersalin", "Copied", lang) else tr("Salin Teks", "Copy Text", lang), fontSize = 10.sp)
                             }
                         }
                     }
@@ -7147,7 +7149,7 @@ val context = LocalContext.current
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Icon(Icons.Default.CloudDownload, contentDescription = null, tint = EmeraldSuccess, modifier = Modifier.size(24.dp))
                         Text(
-                            text = "Pulihkan Cadangan (Restore)",
+                            text = tr("Pulihkan Cadangan (Restore)", "Restore Backup", lang),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -7158,7 +7160,11 @@ val context = LocalContext.current
                 }
 
                 Text(
-                    text = "Pilih berkas cadangan (.ZIP paket lengkap atau .JSON) yang didapat dari HP lama atau backup sebelumnya:",
+                    text = tr(
+                        "Pilih berkas cadangan (.ZIP paket lengkap atau .JSON) yang didapat dari HP lama atau backup sebelumnya:",
+                        "Select a backup file (.ZIP complete package or .JSON) from a previous device or backup:",
+                        lang
+                    ),
                     fontSize = 11.sp,
                     color = Slate600
                 )
@@ -7298,7 +7304,7 @@ val context = LocalContext.current
                                 exportInventory = importInventory
                             )
                             viewModel.importModularBackup(jsonInput.trim(), selection) {
-                                successMessage = "Data JSON berhasil dipulihkan!"
+                                successMessage = tr("Data JSON berhasil dipulihkan!", "JSON data restored successfully!", lang)
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),

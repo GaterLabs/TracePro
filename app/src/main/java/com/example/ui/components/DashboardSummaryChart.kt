@@ -351,7 +351,7 @@ fun DashboardSummaryChart(
                                     trackColor = Slate200,
                                 )
                                 Text(
-                                    text = "${(visitRatio * 100).toInt()}% • Sisa ${totalTargetOutlets - visitedOutletCount} Toko",
+                                    text = "${(visitRatio * 100).toInt()}% • ${com.example.util.AppStrings.tr("Sisa", "Remaining", lang)} ${totalTargetOutlets - visitedOutletCount} ${com.example.util.AppStrings.tr("Toko", "Stores", lang)}",
                                     fontSize = 9.sp,
                                     color = if (visitRatio >= 0.7f) EmeraldText else Slate500,
                                     fontWeight = FontWeight.SemiBold,

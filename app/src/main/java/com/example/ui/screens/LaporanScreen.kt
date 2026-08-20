@@ -1099,9 +1099,9 @@ fun LaporanScreen(
             title = {
                 Text(
                     text = when (filterPeriodType) {
-                        1 -> AppStrings.tr("Pilih Tanggal Spesifik", "Select Specific Date", lang)
-                        2 -> AppStrings.tr("Pilih Bulan Laporan", "Select Report Month", lang)
-                        3 -> AppStrings.tr("Pilih Tahun Laporan", "Select Report Year", lang)
+                        2 -> AppStrings.tr("Pilih Tanggal Spesifik", "Select Specific Date", lang)
+                        3 -> AppStrings.tr("Pilih Bulan Laporan", "Select Report Month", lang)
+                        4 -> AppStrings.tr("Pilih Tahun Laporan", "Select Report Year", lang)
                         else -> AppStrings.tr("Pilih Filter", "Select Filter", lang)
                     },
                     fontWeight = FontWeight.Bold,
@@ -1111,7 +1111,7 @@ fun LaporanScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     when (filterPeriodType) {
-                        1 -> {
+                        2 -> {
                             OutlinedTextField(
                                 value = selectedDate,
                                 onValueChange = { selectedDate = it },
@@ -1122,7 +1122,7 @@ fun LaporanScreen(
                             )
                             Text("${AppStrings.tr("Contoh:", "Example:", lang)} $todayDateStr", fontSize = 11.sp, color = Slate600)
                         }
-                        2 -> {
+                        3 -> {
                             OutlinedTextField(
                                 value = selectedMonth,
                                 onValueChange = { selectedMonth = it },
@@ -1133,7 +1133,7 @@ fun LaporanScreen(
                             )
                             Text("${AppStrings.tr("Contoh:", "Example:", lang)} $thisMonthStr", fontSize = 11.sp, color = Slate600)
                         }
-                        3 -> {
+                        4 -> {
                             OutlinedTextField(
                                 value = selectedYear,
                                 onValueChange = { selectedYear = it },
