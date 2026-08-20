@@ -40,6 +40,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Remove any corrupt or outdated wrapper JAR
+        run: rm -f gradle/wrapper/gradle-wrapper.jar
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -51,11 +54,6 @@ jobs:
         with:
           gradle-version: '9.3.1'
           cache-read-only: false
-
-      - name: Regenerate Gradle Wrapper
-        run: |
-          gradle wrapper --gradle-version 9.3.1 --distribution-type bin
-          chmod +x gradlew
 
       - name: Setup Environment Variables (.env)
         run: |
@@ -100,11 +98,11 @@ jobs:
 
       - name: Run Unit Tests
         if: ${{ github.event.inputs.run_tests != 'false' }}
-        run: ./gradlew testDebugUnitTest --continue --stacktrace
+        run: gradle testDebugUnitTest --continue --stacktrace
 
       - name: Build Debug APK
         if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.build_variant == 'debug' || github.event.inputs.build_variant == 'all' }}
-        run: ./gradlew assembleDebug --stacktrace
+        run: gradle assembleDebug --stacktrace
 
       - name: Build Release APK
         if: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_variant == 'release' || github.event.inputs.build_variant == 'all')) }}
@@ -119,7 +117,7 @@ jobs:
             export STORE_PASSWORD=android
             export KEY_PASSWORD=android
           fi
-          ./gradlew assembleRelease --stacktrace
+          gradle assembleRelease --stacktrace
 
       - name: Build Release Bundle (AAB)
         if: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.build_variant == 'release' || github.event.inputs.build_variant == 'all')) }}
@@ -133,7 +131,7 @@ jobs:
             export STORE_PASSWORD=android
             export KEY_PASSWORD=android
           fi
-          ./gradlew bundleRelease --stacktrace
+          gradle bundleRelease --stacktrace
 
       - name: Upload Debug APK Artifact
         if: ${{ always() && (github.event_name != 'workflow_dispatch' || github.event.inputs.build_variant == 'debug' || github.event.inputs.build_variant == 'all') }}
