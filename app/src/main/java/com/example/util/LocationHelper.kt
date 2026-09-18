@@ -29,7 +29,12 @@ data class UserGpsLocation(
     val isAvailable: Boolean = true,
     val provider: String = "GPS",
     val isFresh: Boolean = true,
-    val satellitesUsed: Int = 0
+    val satellitesUsed: Int = 0,
+    val bearing: Float = 0f,
+    val hasBearing: Boolean = false,
+    val speedMps: Float = 0f,
+    val altitude: Double = 0.0,
+    val timeMs: Long = 0L
 )
 
 object LocationHelper {
@@ -39,9 +44,77 @@ object LocationHelper {
     const val DEFAULT_LNG = 106.8456
 
     /**
+     * Algoritma penentu apakah lokasi baru secara objektif lebih akurat dan valid dibanding lokasi sekarang.
+     * Menggunakan standar resmi Google Android Location filtering untuk mencegah lonjakan ke cell tower (Network)
+     * saat bergerak di lapangan.
+     */
+    fun isBetterLocation(location: Location, currentBestLocation: Location?): Boolean {
+        if (location.latitude == 0.0 && location.longitude == 0.0) return false
+        if (location.latitude < -90.0 || location.latitude > 90.0) return false
+        if (location.longitude < -180.0 || location.longitude > 180.0) return false
+        if (location.accuracy <= 0f || location.accuracy.isNaN()) return false
+
+        if (currentBestLocation == null) {
+            return true
+        }
+
+        val timeDelta: Long = location.time - currentBestLocation.time
+        val isSignificantlyNewer: Boolean = timeDelta > 120_000L
+        val isSignificantlyOlder: Boolean = timeDelta < -120_000L
+        val isNewer: Boolean = timeDelta > 0
+
+        if (isSignificantlyNewer) {
+            return true
+        } else if (isSignificantlyOlder) {
+            return false
+        }
+
+        val accuracyDelta: Float = location.accuracy - currentBestLocation.accuracy
+        val isLessAccurate: Boolean = accuracyDelta > 0f
+        val isMoreAccurate: Boolean = accuracyDelta < 0f
+        val isSignificantlyLessAccurate: Boolean = accuracyDelta > 150f
+
+        val isFromSameProvider: Boolean = location.provider == currentBestLocation.provider
+        val isNewGps: Boolean = location.provider == LocationManager.GPS_PROVIDER
+        val isOldGps: Boolean = currentBestLocation.provider == LocationManager.GPS_PROVIDER
+
+        // Jika lokasi saat ini didapat dari Satelit GPS dan masih segar (< 30 detik),
+        // tolak update dari Network cell tower yang akurasinya rendah (> 45m).
+        if (isOldGps && !isNewGps && (System.currentTimeMillis() - currentBestLocation.time < 30_000L) && location.accuracy > 45f) {
+            return false
+        }
+
+        // Jika update baru adalah Satelit GPS sedangkan sebelumnya Network, prioritaskan GPS selama akurasinya wajar (< 100m)
+        if (isNewGps && !isOldGps && location.accuracy <= 100f) {
+            return true
+        }
+
+        return when {
+            isMoreAccurate -> true
+            isNewer && !isLessAccurate -> true
+            isNewer && !isSignificantlyLessAccurate && isFromSameProvider -> true
+            else -> false
+        }
+    }
+
+    /**
+     * Mengecek apakah layanan lokasi (GPS / Network) aktif di perangkat.
+     */
+    fun isLocationServiceEnabled(context: Context): Boolean {
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        return try {
+            val gpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            val networkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            gpsEnabled || networkEnabled
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
      * Mengecek apakah koordinat lokasi masih segar (bukan cache lama).
      */
-    fun isLocationFresh(loc: Location, maxAgeSeconds: Long = 90): Boolean {
+    fun isLocationFresh(loc: Location, maxAgeSeconds: Long = 300): Boolean {
         val ageMs = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.JELLY_BEAN_MR1) {
             (android.os.SystemClock.elapsedRealtimeNanos() - loc.elapsedRealtimeNanos) / 1_000_000L
         } else {
@@ -89,8 +162,8 @@ object LocationHelper {
     }
 
     /**
-     * Dapatkan Flow update lokasi GPS satelit terkini secara real-time.
-     * Didesain 100% OFFLINE / AIRPLANE MODE: Mengutamakan chip GNSS Satelit Fisik (0m distance delta, 1s interval).
+     * Dapatkan Flow update lokasi GPS satelit & network terkini secara real-time.
+     * Didesain 100% responsif & offline-compatible untuk mendeteksi pergerakan secara instan.
      */
     @SuppressLint("MissingPermission")
     fun observeCurrentLocation(context: Context): Flow<UserGpsLocation> = callbackFlow {
@@ -102,63 +175,48 @@ object LocationHelper {
             return@callbackFlow
         }
 
-        // Coba ambil last known location terbaik HANYA jika segar (< 60 detik) & akurat
-        var initialBestLoc: Location? = null
-        try {
-            val gpsLast = if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-            } else null
-
-            if (gpsLast != null && isLocationFresh(gpsLast, 60)) {
-                initialBestLoc = gpsLast
-            } else {
-                val netLast = if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                    locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                } else null
-                if (netLast != null && isLocationFresh(netLast, 30)) {
-                    initialBestLoc = netLast
-                }
-            }
-        } catch (_: SecurityException) {
-        } catch (_: Exception) {}
-
-        if (initialBestLoc != null) {
+        // Bootstrap dengan lokasi terbaik yang tersedia di perangkat
+        var currentBestLocation: Location? = getBestLastKnownLocation(locationManager)
+        if (currentBestLocation != null) {
             trySend(
                 UserGpsLocation(
-                    latitude = initialBestLoc.latitude,
-                    longitude = initialBestLoc.longitude,
-                    accuracyMeter = initialBestLoc.accuracy,
+                    latitude = currentBestLocation.latitude,
+                    longitude = currentBestLocation.longitude,
+                    accuracyMeter = currentBestLocation.accuracy,
                     isAvailable = true,
-                    provider = initialBestLoc.provider ?: "GPS",
-                    isFresh = true
+                    provider = currentBestLocation.provider ?: "Cache",
+                    isFresh = isLocationFresh(currentBestLocation, 300),
+                    bearing = if (currentBestLocation.hasBearing()) currentBestLocation.bearing else 0f,
+                    hasBearing = currentBestLocation.hasBearing(),
+                    speedMps = if (currentBestLocation.hasSpeed()) currentBestLocation.speed else 0f,
+                    altitude = if (currentBestLocation.hasAltitude()) currentBestLocation.altitude else 0.0,
+                    timeMs = currentBestLocation.time
                 )
             )
         } else {
-            trySend(UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "Searching", isFresh = false))
+            trySend(UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "Mencari Sinyal GPS", isFresh = false))
         }
 
-        var lastEmittedLat = 0.0
-        var lastEmittedLng = 0.0
-        var lastEmittedTime = 0L
-        var lastSatelliteFixTime = 0L
+        var lastEmittedLat = currentBestLocation?.latitude ?: 0.0
+        var lastEmittedLng = currentBestLocation?.longitude ?: 0.0
+        var lastEmittedTime = System.currentTimeMillis()
 
         val listener = object : LocationListener {
             override fun onLocationChanged(location: Location) {
-                val isGps = location.provider == LocationManager.GPS_PROVIDER
-                val now = System.currentTimeMillis()
-
-                if (isGps) {
-                    lastSatelliteFixTime = now
-                } else {
-                    // Hanya gunakan network jika satelit belum kirim fix dalam 15 detik terakhir
-                    if (now - lastSatelliteFixTime <= 15_000L) {
-                        return
-                    }
+                // Gunakan filter isBetterLocation agar perpindahan lokasi akurat dan tidak melompat ke cell tower
+                if (!isBetterLocation(location, currentBestLocation)) {
+                    return
                 }
 
-                // Filter perubahan: hanya emit jika geser >= 10m atau sudah lewat >= 5 detik
+                currentBestLocation = location
+                val now = System.currentTimeMillis()
+                val isGps = location.provider == LocationManager.GPS_PROVIDER
+
                 val dist = calculateDistanceMeters(lastEmittedLat, lastEmittedLng, location.latitude, location.longitude)
-                if (lastEmittedLat == 0.0 || dist >= 10.0 || (now - lastEmittedTime >= 6_000L)) {
+                val timeDiff = now - lastEmittedTime
+
+                // Selalu emit jika GPS dapat fix baru yang lebih baik, atau berpindah >= 0.8 meter, atau berkala
+                if (lastEmittedLat == 0.0 || dist >= 0.8 || timeDiff >= 1000L || isGps) {
                     lastEmittedLat = location.latitude
                     lastEmittedLng = location.longitude
                     lastEmittedTime = now
@@ -170,11 +228,17 @@ object LocationHelper {
                             accuracyMeter = location.accuracy,
                             isAvailable = true,
                             provider = if (isGps) "Satelit GPS" else (location.provider ?: "Network"),
-                            isFresh = true
+                            isFresh = true,
+                            bearing = if (location.hasBearing()) location.bearing else 0f,
+                            hasBearing = location.hasBearing(),
+                            speedMps = if (location.hasSpeed()) location.speed else 0f,
+                            altitude = if (location.hasAltitude()) location.altitude else 0.0,
+                            timeMs = location.time
                         )
                     )
                 }
             }
+
             @Deprecated("Deprecated in Java")
             override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
             override fun onProviderEnabled(provider: String) {}
@@ -182,13 +246,18 @@ object LocationHelper {
         }
 
         try {
-            // Mode Hemat Baterai & Responsif: interval 5000ms dan 10m jarak filter
             val mainLooper = android.os.Looper.getMainLooper()
-            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 5000L, 10f, listener, mainLooper)
-            }
-            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000L, 10f, listener, mainLooper)
+            val providers = listOfNotNull(
+                LocationManager.GPS_PROVIDER.takeIf { locationManager.isProviderEnabled(it) },
+                LocationManager.NETWORK_PROVIDER.takeIf { locationManager.isProviderEnabled(it) },
+                LocationManager.PASSIVE_PROVIDER
+            )
+
+            for (prov in providers) {
+                try {
+                    // Update GPS setiap 1 detik dan 0 meter threshold agar perpindahan terdeteksi kontinu tanpa jeda
+                    locationManager.requestLocationUpdates(prov, 1000L, 0f, listener, mainLooper)
+                } catch (_: Exception) {}
             }
         } catch (_: SecurityException) {
         } catch (_: Exception) {}
@@ -202,32 +271,47 @@ object LocationHelper {
     }
 
     /**
-     * Dapatkan lokasi instan terbaik (GPS/Network) secara synchronous/langsung.
-     * Memfilter cache kadaluwarsa agar tidak mengembalikan koordinat palsu / rumah lama.
+     * Mengambil lokasi cache terbaik dari semua provider yang tersedia (GPS, Network, Passive).
+     */
+    @SuppressLint("MissingPermission")
+    fun getBestLastKnownLocation(locationManager: LocationManager): Location? {
+        val providers = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        )
+        var best: Location? = null
+        for (prov in providers) {
+            try {
+                if (locationManager.isProviderEnabled(prov)) {
+                    val loc = locationManager.getLastKnownLocation(prov) ?: continue
+                    if (best == null || isBetterLocation(loc, best)) {
+                        best = loc
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        return best
+    }
+
+    /**
+     * Mengambil lokasi cache terbaik langsung dari Context.
+     */
+    @SuppressLint("MissingPermission")
+    fun getBestLastKnownLocation(context: Context): Location? {
+        val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
+        return getBestLastKnownLocation(locationManager)
+    }
+
+    /**
+     * Dapatkan lokasi instan terbaik (GPS/Network/Passive) secara synchronous/langsung.
      */
     @SuppressLint("MissingPermission")
     fun getInstantLocation(context: Context): UserGpsLocation {
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
             ?: return UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "None", isFresh = false)
 
-        var bestLoc: Location? = null
-        try {
-            // Prioritas 1: GPS Hardware Satelit
-            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                val gpsLoc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                if (gpsLoc != null && isLocationFresh(gpsLoc, 90)) {
-                    bestLoc = gpsLoc
-                }
-            }
-            // Prioritas 2: Network jika GPS belum ada & masih fresh
-            if (bestLoc == null && locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                val netLoc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                if (netLoc != null && isLocationFresh(netLoc, 45)) {
-                    bestLoc = netLoc
-                }
-            }
-        } catch (_: SecurityException) {
-        } catch (_: Exception) {}
+        val bestLoc = getBestLastKnownLocation(locationManager)
 
         return if (bestLoc != null) {
             UserGpsLocation(
@@ -236,7 +320,7 @@ object LocationHelper {
                 accuracyMeter = bestLoc.accuracy,
                 isAvailable = true,
                 provider = bestLoc.provider ?: "GPS",
-                isFresh = true
+                isFresh = isLocationFresh(bestLoc, 300)
             )
         } else {
             UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "Mencari Sinyal", isFresh = false)
@@ -245,14 +329,13 @@ object LocationHelper {
 
     /**
      * Mengunci titik koordinat GPS Satelit Segar secara aktif (High Accuracy Lock).
-     * Sangat penting untuk Mode Pesawat / 100% Offline di mana user menekan "Ambil Titik GPS".
-     * Fungsi ini akan standby menunggu chip satelit HP memberikan fix dengan akurasi tinggi (< targetAccuracyMeters).
+     * Sangat penting untuk Mode Pesawat / 100% Offline di mana user menekan "Ambil Titik GPS" atau "Lokasi Saya".
      */
     @SuppressLint("MissingPermission")
     suspend fun acquireFreshSatelliteFix(
         context: Context,
-        maxTimeoutMs: Long = 10000L,
-        targetAccuracyMeters: Float = 25f
+        maxTimeoutMs: Long = 8000L,
+        targetAccuracyMeters: Float = 30f
     ): UserGpsLocation = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         if (locationManager == null) {
@@ -260,7 +343,7 @@ object LocationHelper {
             return@suspendCancellableCoroutine
         }
 
-        // Periksa apakah GPS aktif
+        // Periksa apakah ada provider lokasi yang aktif
         var isGpsEnabled = false
         var isNetEnabled = false
         try {
@@ -269,27 +352,27 @@ object LocationHelper {
         } catch (_: Exception) {}
 
         if (!isGpsEnabled && !isNetEnabled) {
-            continuation.resumeWith(Result.success(UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "GPS Nonaktif", isFresh = false)))
+            val cached = getInstantLocation(context)
+            continuation.resumeWith(Result.success(cached.copy(provider = "GPS Nonaktif (Gunakan Pengaturan)")))
             return@suspendCancellableCoroutine
         }
 
-        var bestLocationSoFar: Location? = null
+        var bestLocationSoFar: Location? = getBestLastKnownLocation(locationManager)
         val isFinished = java.util.concurrent.atomic.AtomicBoolean(false)
 
         val listener = object : LocationListener {
             override fun onLocationChanged(loc: Location) {
                 if (isFinished.get()) return
 
-                if (bestLocationSoFar == null || loc.accuracy < (bestLocationSoFar?.accuracy ?: Float.MAX_VALUE)) {
+                if (bestLocationSoFar == null || isBetterLocation(loc, bestLocationSoFar)) {
                     bestLocationSoFar = loc
                 }
 
-                // Jika sudah mencapai target akurasi satelit (misal <= 25 meter)
+                // Jika sudah mencapai target akurasi
                 if (loc.accuracy <= targetAccuracyMeters && loc.accuracy > 0f) {
                     if (isFinished.compareAndSet(false, true)) {
                         try {
                             locationManager.removeUpdates(this)
-                        } catch (_: SecurityException) {
                         } catch (_: Exception) {}
 
                         if (continuation.isActive) {
@@ -300,8 +383,13 @@ object LocationHelper {
                                         longitude = loc.longitude,
                                         accuracyMeter = loc.accuracy,
                                         isAvailable = true,
-                                        provider = "Satelit Standalone",
-                                        isFresh = true
+                                        provider = if (loc.provider == LocationManager.GPS_PROVIDER) "Satelit Standalone" else (loc.provider ?: "Network"),
+                                        isFresh = true,
+                                        bearing = if (loc.hasBearing()) loc.bearing else 0f,
+                                        hasBearing = loc.hasBearing(),
+                                        speedMps = if (loc.hasSpeed()) loc.speed else 0f,
+                                        altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
+                                        timeMs = loc.time
                                     )
                                 )
                             )
@@ -325,7 +413,7 @@ object LocationHelper {
             }
         } catch (_: SecurityException) {
             if (isFinished.compareAndSet(false, true)) {
-                continuation.resumeWith(Result.success(UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "Izin Ditolak", isFresh = false)))
+                continuation.resumeWith(Result.success(getInstantLocation(context)))
             }
             return@suspendCancellableCoroutine
         } catch (_: Exception) {
@@ -341,7 +429,6 @@ object LocationHelper {
             if (isFinished.compareAndSet(false, true)) {
                 try {
                     locationManager.removeUpdates(listener)
-                } catch (_: SecurityException) {
                 } catch (_: Exception) {}
 
                 if (continuation.isActive) {
@@ -354,13 +441,17 @@ object LocationHelper {
                                     longitude = finalLoc.longitude,
                                     accuracyMeter = finalLoc.accuracy,
                                     isAvailable = true,
-                                    provider = "Satelit GPS",
-                                    isFresh = true
+                                    provider = finalLoc.provider ?: "GPS",
+                                    isFresh = true,
+                                    bearing = if (finalLoc.hasBearing()) finalLoc.bearing else 0f,
+                                    hasBearing = finalLoc.hasBearing(),
+                                    speedMps = if (finalLoc.hasSpeed()) finalLoc.speed else 0f,
+                                    altitude = if (finalLoc.hasAltitude()) finalLoc.altitude else 0.0,
+                                    timeMs = finalLoc.time
                                 )
                             )
                         )
                     } else {
-                        // Fallback ke instant location terakhir
                         continuation.resumeWith(Result.success(getInstantLocation(context)))
                     }
                 }
@@ -373,7 +464,6 @@ object LocationHelper {
                 handler.removeCallbacks(timeoutRunnable)
                 try {
                     locationManager.removeUpdates(listener)
-                } catch (_: SecurityException) {
                 } catch (_: Exception) {}
             }
         }

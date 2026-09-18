@@ -19,7 +19,8 @@ enum class AppNavScreen(val title: String, val iconName: String) {
     DASHBOARD("Dashboard", "dashboard"),
     MASTER_DATA("Master Data", "inventory"),
     LAPORAN("Laporan", "analytics"),
-    UTILITAS("Utilitas", "settings")
+    UTILITAS("Utilitas", "settings"),
+    MAPS("Peta & Navigasi", "map")
 }
 
 enum class OutletSortBy(val label: String, val icon: String) {
@@ -193,6 +194,14 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
         val instant = com.example.util.LocationHelper.getInstantLocation(getApplication())
         _currentGpsLocation.value = instant
         startGpsTracking()
+    }
+
+    suspend fun acquireAccurateGps(): com.example.util.UserGpsLocation {
+        val fix = com.example.util.LocationHelper.acquireFreshSatelliteFix(getApplication())
+        if (fix.isAvailable) {
+            _currentGpsLocation.value = fix
+        }
+        return fix
     }
 
     // Outlet List Sorting and Aging Filter States
@@ -526,6 +535,12 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                 "Outlet ${finalWarung.namaWarung} tersimpan."
             }
             closeTransactionDialog()
+        }
+    }
+
+    fun updateWarungsBatch(warungs: List<WarungEntity>) {
+        viewModelScope.launch {
+            repository.insertWarungsBatch(warungs)
         }
     }
 

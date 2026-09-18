@@ -291,6 +291,17 @@ fun SfaMainApp(
                     )
 
                     DrawerNavTile(
+                        icon = Icons.Default.Map,
+                        title = com.example.util.AppStrings.navMaps(lang),
+                        subtitle = com.example.util.AppStrings.subMaps(lang),
+                        isSelected = currentScreen == AppNavScreen.MAPS,
+                        onClick = {
+                            viewModel.setScreen(AppNavScreen.MAPS)
+                            scope.launch { drawerState.close() }
+                        }
+                    )
+
+                    DrawerNavTile(
                         icon = Icons.Default.Assessment,
                         title = com.example.util.AppStrings.navLaporan(lang),
                         subtitle = com.example.util.AppStrings.subLaporan(lang),
@@ -419,7 +430,7 @@ fun SfaMainApp(
                             Triple(AppNavScreen.RIWAYAT, Icons.Filled.History to Icons.Outlined.History, com.example.util.AppStrings.navRiwayat(lang)),
                             Triple(AppNavScreen.DASHBOARD, Icons.Filled.Dashboard to Icons.Outlined.Dashboard, com.example.util.AppStrings.navDashboard(lang)),
                             Triple(AppNavScreen.MASTER_DATA, Icons.Filled.Inventory2 to Icons.Outlined.Inventory2, com.example.util.AppStrings.navMaster(lang)),
-                            Triple(AppNavScreen.LAPORAN, Icons.Filled.Assessment to Icons.Outlined.Assessment, com.example.util.AppStrings.navLaporan(lang))
+                            Triple(AppNavScreen.MAPS, Icons.Filled.Map to Icons.Outlined.Map, com.example.util.AppStrings.navMaps(lang))
                         )
 
                         navItems.forEach { (screen, icons, label) ->
@@ -473,6 +484,7 @@ fun SfaMainApp(
                         AppNavScreen.MASTER_DATA -> MasterDataScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                         AppNavScreen.LAPORAN -> LaporanScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                         AppNavScreen.UTILITAS -> UtilitasScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
+                        AppNavScreen.MAPS -> MapsScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                     }
                 }
 

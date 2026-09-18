@@ -30,6 +30,7 @@ object AppStrings {
     fun navMaster(lang: String) = tr("Master Data", "Master Data", lang)
     fun navLaporan(lang: String) = tr("Laporan", "Reports", lang)
     fun navUtilitas(lang: String) = tr("Utilitas", "Settings", lang)
+    fun navMaps(lang: String) = tr("Peta & Navigasi", "Maps & Navigation", lang)
 
     // Drawer Subtitles
     fun subTransaksi(lang: String) = tr("Kunjungan outlet, titip baru & restock", "Outlet visits, drops & restock", lang)
@@ -38,6 +39,7 @@ object AppStrings {
     fun subMaster(lang: String) = tr("Produk UOM, Outlet, Rute & Supplier", "Product SKUs, Outlets, Routes & Suppliers", lang)
     fun subLaporan(lang: String) = tr("4 Laci Stok, Setoran & Piutang Bon", "4 Stock Drawers, Settlement & Debts", lang)
     fun subUtilitas(lang: String) = tr("Profil, Bahasa, Backup JSON & Konfigurasi", "Profile, Language, JSON Backup & Config", lang)
+    fun subMaps(lang: String) = tr("Navigasi rute rute salesman & multi-waypoint", "Salesman route navigation & multi-waypoints", lang)
 
     // Actions
     fun actionMuatPagi(lang: String) = tr("Muat Barang Pagi (Loading)", "Morning Stock Loading", lang)

@@ -4337,8 +4337,8 @@ val context = LocalContext.current
     var limitHutang by remember { mutableStateOf("${warung?.limitHutangMaksimal?.toLong() ?: 500000}") }
     var ruteId by remember { mutableStateOf(warung?.ruteId ?: rutes.firstOrNull()?.id ?: "RUTE-01") }
     var fotoOutlet by remember { mutableStateOf(warung?.fotoOutlet) }
-    var latitude by remember { mutableDoubleStateOf(warung?.latitude ?: -6.2088) }
-    var longitude by remember { mutableDoubleStateOf(warung?.longitude ?: 106.8456) }
+    var latitude by remember { mutableDoubleStateOf(warung?.latitude ?: 0.0) }
+    var longitude by remember { mutableDoubleStateOf(warung?.longitude ?: 0.0) }
     var akurasiGps by remember { mutableIntStateOf(warung?.akurasiGpsMeter ?: 10) }
     var showInAppCamera by remember { mutableStateOf(false) }
 
@@ -4346,25 +4346,48 @@ val context = LocalContext.current
     var gpsLockStatus by remember {
         mutableStateOf(
             if (warung != null && warung.latitude != 0.0) {
-                "Terkunci: ${String.format(Locale.US, "%.5f, %.5f", warung.latitude, warung.longitude)} (±${warung.akurasiGpsMeter}m)"
+                "Terkunci: ${String.format(Locale.US, "%.6f, %.6f", warung.latitude, warung.longitude)} (±${warung.akurasiGpsMeter}m)"
             } else null
         )
     }
 
+    // Auto-initialize coordinates from actual live device location if no coordinates provided
+    LaunchedEffect(Unit) {
+        if (latitude == 0.0 || longitude == 0.0) {
+            val bestKnown = com.example.util.LocationHelper.getBestLastKnownLocation(context)
+            if (bestKnown != null && bestKnown.latitude != 0.0) {
+                latitude = bestKnown.latitude
+                longitude = bestKnown.longitude
+                akurasiGps = bestKnown.accuracy.toInt().coerceAtLeast(3)
+                gpsLockStatus = "Terkunci: ${String.format(Locale.US, "%.6f, %.6f", bestKnown.latitude, bestKnown.longitude)} (±${akurasiGps}m • ${bestKnown.provider})"
+                if (alamat.isBlank()) {
+                    alamat = try {
+                        com.example.util.LocationHelper.reverseGeocode(context, bestKnown.latitude, bestKnown.longitude)
+                    } catch (_: Exception) {
+                        "Koordinat: ${String.format(Locale.US, "%.6f, %.6f", bestKnown.latitude, bestKnown.longitude)}"
+                    }
+                }
+            } else {
+                latitude = com.example.util.LocationHelper.DEFAULT_LAT
+                longitude = com.example.util.LocationHelper.DEFAULT_LNG
+            }
+        }
+    }
+
     val detectGpsAndReverseGeocode: () -> Unit = {
         isDetectingGps = true
-        gpsLockStatus = "📡 Mengunci sinyal Satelit GPS (Mode Offline)..."
+        gpsLockStatus = "📡 Mengunci sinyal Satelit GPS (Mode Presisi Tinggi)..."
         coroutineScope.launch(Dispatchers.IO) {
             try {
-                val freshLoc = com.example.util.LocationHelper.acquireFreshSatelliteFix(context, maxTimeoutMs = 8000L, targetAccuracyMeters = 25f)
+                val freshLoc = com.example.util.LocationHelper.acquireFreshSatelliteFix(context, maxTimeoutMs = 6000L, targetAccuracyMeters = 15f)
                 val detectedLat = if (freshLoc.isAvailable && freshLoc.latitude != 0.0) freshLoc.latitude else com.example.util.LocationHelper.DEFAULT_LAT
                 val detectedLng = if (freshLoc.isAvailable && freshLoc.longitude != 0.0) freshLoc.longitude else com.example.util.LocationHelper.DEFAULT_LNG
-                val detectedAccuracy = if (freshLoc.isAvailable) freshLoc.accuracyMeter.toInt().coerceAtLeast(3) else 10
+                val detectedAccuracy = if (freshLoc.isAvailable) freshLoc.accuracyMeter.toInt().coerceAtLeast(2) else 8
 
                 val convertedAddress = try {
                     com.example.util.LocationHelper.reverseGeocode(context, detectedLat, detectedLng)
                 } catch (_: Exception) {
-                    "Koordinat: ${String.format(Locale.US, "%.5f, %.5f", detectedLat, detectedLng)}"
+                    "Koordinat: ${String.format(Locale.US, "%.6f, %.6f", detectedLat, detectedLng)}"
                 }
 
                 withContext(Dispatchers.Main) {
@@ -4374,7 +4397,7 @@ val context = LocalContext.current
                     if (alamat.isBlank() || alamat.startsWith("Koordinat GPS") || alamat.startsWith("Koordinat:")) {
                         alamat = convertedAddress
                     }
-                    gpsLockStatus = "Terkunci: ${String.format(Locale.US, "%.5f, %.5f", detectedLat, detectedLng)} (±${detectedAccuracy}m • ${freshLoc.provider})"
+                    gpsLockStatus = "Terkunci: ${String.format(Locale.US, "%.6f, %.6f", detectedLat, detectedLng)} (±${detectedAccuracy}m • ${freshLoc.provider})"
                     isDetectingGps = false
                 }
             } catch (e: Exception) {
@@ -4383,7 +4406,7 @@ val context = LocalContext.current
                     latitude = fallback.latitude
                     longitude = fallback.longitude
                     akurasiGps = fallback.accuracyMeter.toInt().coerceAtLeast(10)
-                    gpsLockStatus = "Terkunci: ${String.format(Locale.US, "%.5f, %.5f", fallback.latitude, fallback.longitude)} (±${akurasiGps}m)"
+                    gpsLockStatus = "Terkunci: ${String.format(Locale.US, "%.6f, %.6f", fallback.latitude, fallback.longitude)} (±${akurasiGps}m)"
                     isDetectingGps = false
                 }
             }
