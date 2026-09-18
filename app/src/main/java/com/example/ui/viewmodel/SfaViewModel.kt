@@ -804,13 +804,51 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                 val conversationHistory = currentList.takeLast(8)
                 fullMessages.addAll(conversationHistory)
 
-                val result = com.example.data.ai.OpenAiClient.generateChatCompletion(cfg, fullMessages)
+                val result = com.example.data.ai.OpenAiClient.generateChatCompletion(cfg, fullMessages, enableTools = cfg.isAgentModeEnabled)
                 _isAiLoading.value = false
 
                 result.onSuccess { reply ->
-                    val updated = _aiChatMessages.value.toMutableList()
-                    updated.add(com.example.data.ai.AiChatMessage(role = "assistant", content = reply))
-                    _aiChatMessages.value = updated
+                    if (reply.toolCalls.isNotEmpty() && cfg.isAgentModeEnabled) {
+                        // AI memutuskan untuk memanggil Action Tool (Agent Mode)
+                        val actionExecutor = com.example.data.ai.AiAgentActionExecutor(repository)
+                        val executedResults = mutableListOf<com.example.data.ai.AiToolExecutionResult>()
+
+                        for (toolCall in reply.toolCalls) {
+                            val execResult = actionExecutor.executeToolCall(toolCall)
+                            executedResults.add(execResult)
+                        }
+
+                        val actionSummaries = executedResults.joinToString("\n") { res ->
+                            if (res.isSuccess) "✅ **${res.toolName}**: ${res.summary}"
+                            else "❌ **${res.toolName}**: ${res.summary}"
+                        }
+
+                        val combinedResponse = buildString {
+                            if (reply.content.isNotBlank()) {
+                                append(reply.content)
+                                append("\n\n")
+                            }
+                            append("🤖 **[Agent Mode - Aksi Dieksekusi Langsung ke Database]:**\n")
+                            append(actionSummaries)
+                        }
+
+                        val updated = _aiChatMessages.value.toMutableList()
+                        updated.add(
+                            com.example.data.ai.AiChatMessage(
+                                role = "assistant",
+                                content = combinedResponse,
+                                executedActions = executedResults
+                            )
+                        )
+                        _aiChatMessages.value = updated
+
+                        _feedbackSnackbar.value = "AI Agent berhasil mengeksekusi ${executedResults.size} perintah ke database!"
+                    } else {
+                        // Respon teks biasa
+                        val updated = _aiChatMessages.value.toMutableList()
+                        updated.add(com.example.data.ai.AiChatMessage(role = "assistant", content = reply.content))
+                        _aiChatMessages.value = updated
+                    }
                 }.onFailure { err ->
                     val updated = _aiChatMessages.value.toMutableList()
                     val errorMsg = if (cfg.apiKey.isBlank() && cfg.endpoint.contains("openai.com")) {
@@ -859,11 +897,11 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
 
-            val result = com.example.data.ai.OpenAiClient.generateChatCompletion(cfg, messages)
+            val result = com.example.data.ai.OpenAiClient.generateChatCompletion(cfg, messages, enableTools = false)
             _isAiLoading.value = false
 
-            result.onSuccess { draft ->
-                onResult(draft)
+            result.onSuccess { res ->
+                onResult(res.content)
             }.onFailure { err ->
                 val fallbackDraft = buildFallbackWhatsAppReport(todayTxs)
                 onResult(fallbackDraft)
@@ -890,11 +928,11 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                 com.example.data.ai.AiChatMessage(role = "user", content = outletPrompt)
             )
 
-            val result = com.example.data.ai.OpenAiClient.generateChatCompletion(cfg, messages)
+            val result = com.example.data.ai.OpenAiClient.generateChatCompletion(cfg, messages, enableTools = false)
             _isAiLoading.value = false
 
-            result.onSuccess { advice ->
-                onResult(advice)
+            result.onSuccess { res ->
+                onResult(res.content)
             }.onFailure { err ->
                 val fallback = "💡 **Saran Sistem Heuristik:** Berdasarkan kategori ${warung.kategoriWarung}, titipkan 15–20 pcs produk fast-moving. Saldo bon saat ini ${formatRupiah(warung.saldoPiutang)} (Limit: ${formatRupiah(warung.limitHutangMaksimal)}). Pastikan tarik kas sebelum menambah limit kredit."
                 onResult(fallback)

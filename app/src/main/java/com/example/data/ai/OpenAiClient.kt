@@ -22,8 +22,9 @@ object OpenAiClient {
 
     suspend fun generateChatCompletion(
         config: AiConfig,
-        messages: List<AiChatMessage>
-    ): Result<String> = withContext(Dispatchers.IO) {
+        messages: List<AiChatMessage>,
+        enableTools: Boolean = false
+    ): Result<AiCompletionResult> = withContext(Dispatchers.IO) {
         try {
             val url = formatChatEndpoint(config.endpoint)
             
@@ -39,6 +40,19 @@ object OpenAiClient {
                 messagesArray.put(msgObj)
             }
             jsonRoot.put("messages", messagesArray)
+
+            // Inject Tools JSON schema if Agent mode is enabled
+            if (enableTools && config.isAgentModeEnabled) {
+                try {
+                    val tools = AiToolDefinitions.getToolsJsonArray()
+                    if (tools.length() > 0) {
+                        jsonRoot.put("tools", tools)
+                        jsonRoot.put("tool_choice", "auto")
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
 
             val requestBody = jsonRoot.toString().toRequestBody(JSON_MEDIA_TYPE)
 
@@ -71,7 +85,23 @@ object OpenAiClient {
                 val firstChoice = choices.getJSONObject(0)
                 val message = firstChoice.optJSONObject("message")
                 val content = message?.optString("content") ?: ""
-                Result.success(content.trim())
+
+                val toolCallsList = mutableListOf<AiToolCall>()
+                val rawToolCalls = message?.optJSONArray("tool_calls")
+                if (rawToolCalls != null) {
+                    for (i in 0 until rawToolCalls.length()) {
+                        val tcObj = rawToolCalls.optJSONObject(i) ?: continue
+                        val tcId = tcObj.optString("id", "call_${System.currentTimeMillis()}_$i")
+                        val funcObj = tcObj.optJSONObject("function") ?: continue
+                        val funcName = funcObj.optString("name", "")
+                        val funcArgs = funcObj.optString("arguments", "{}")
+                        if (funcName.isNotBlank()) {
+                            toolCallsList.add(AiToolCall(id = tcId, name = funcName, argumentsJson = funcArgs))
+                        }
+                    }
+                }
+
+                Result.success(AiCompletionResult(content = content.trim(), toolCalls = toolCallsList))
             } else {
                 Result.failure(Exception("Format respons AI tidak memuat choices yang valid."))
             }
@@ -91,9 +121,9 @@ object OpenAiClient {
             AiChatMessage(role = "system", content = "Kamu adalah asisten tes."),
             AiChatMessage(role = "user", content = "Balas satu kata: 'TERHUBUNG'")
         )
-        val result = generateChatCompletion(config, testMessages)
+        val result = generateChatCompletion(config, testMessages, enableTools = false)
         result.map { reply ->
-            "Koneksi Berhasil! Model '${config.model}' merespons: $reply"
+            "Koneksi Berhasil! Model '${config.model}' merespons: ${reply.content}"
         }
     }
 

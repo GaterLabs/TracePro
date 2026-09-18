@@ -12,6 +12,7 @@ object AiPreferencesHelper {
     private const val KEY_CUSTOM_PERSONA = "ai_custom_persona"
     private const val KEY_TEMPERATURE = "ai_temperature"
     private const val KEY_IS_ENABLED = "ai_is_enabled"
+    private const val KEY_IS_AGENT_MODE = "ai_is_agent_mode"
 
     const val DEFAULT_ENDPOINT = "https://ai.drakor.pp.ua/v1"
     const val DEFAULT_API_KEY = "freellmapi-f657ed0085e8e45b7282037af89d6712e8fb0db6860fcf90"
@@ -33,7 +34,8 @@ object AiPreferencesHelper {
             model = if (model.isNullOrBlank() || model == "gpt-4o-mini") DEFAULT_MODEL else model,
             customPersona = prefs.getString(KEY_CUSTOM_PERSONA, "") ?: "",
             temperature = prefs.getFloat(KEY_TEMPERATURE, 0.7f).toDouble(),
-            isEnabled = prefs.getBoolean(KEY_IS_ENABLED, true)
+            isEnabled = prefs.getBoolean(KEY_IS_ENABLED, true),
+            isAgentModeEnabled = prefs.getBoolean(KEY_IS_AGENT_MODE, true)
         )
     }
 
@@ -46,6 +48,7 @@ object AiPreferencesHelper {
             .putString(KEY_CUSTOM_PERSONA, config.customPersona.trim())
             .putFloat(KEY_TEMPERATURE, config.temperature.toFloat())
             .putBoolean(KEY_IS_ENABLED, config.isEnabled)
+            .putBoolean(KEY_IS_AGENT_MODE, config.isAgentModeEnabled)
             .apply()
     }
 }

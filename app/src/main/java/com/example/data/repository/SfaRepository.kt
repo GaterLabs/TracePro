@@ -65,6 +65,9 @@ class SfaRepository(private val dao: SfaDao) {
         dao.deleteCustomPrice(warungId, productId)
     }
 
+    suspend fun insertTransaction(transaction: TransactionEntity) = dao.insertTransaction(transaction)
+    suspend fun getTransactionsByWarungSync(warungId: String): List<TransactionEntity> = dao.getTransactionsByWarungSync(warungId)
+
     // Direct Getters for Backup
     suspend fun getAllProductsDirect(): List<ProductEntity> = dao.getAllProductsDirect()
     suspend fun getAllWarungsDirect(): List<WarungEntity> = dao.getAllWarungsDirect()

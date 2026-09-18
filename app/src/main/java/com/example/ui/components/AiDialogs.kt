@@ -130,6 +130,38 @@ fun AiCopilotDialog(
                                                 modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                             )
                                         }
+
+                                        // Agent Mode Badge (Clickable Toggle)
+                                        Surface(
+                                            color = if (aiConfig.isAgentModeEnabled) EmeraldPrimary.copy(alpha = 0.2f) else Slate800,
+                                            shape = RoundedCornerShape(4.dp),
+                                            border = androidx.compose.foundation.BorderStroke(
+                                                0.8.dp,
+                                                if (aiConfig.isAgentModeEnabled) EmeraldPrimary else Slate600
+                                            ),
+                                            modifier = Modifier.clickable {
+                                                viewModel.updateAiConfig(aiConfig.copy(isAgentModeEnabled = !aiConfig.isAgentModeEnabled))
+                                            }
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(CircleShape)
+                                                        .background(if (aiConfig.isAgentModeEnabled) EmeraldPrimary else Slate400)
+                                                )
+                                                Text(
+                                                    text = if (aiConfig.isAgentModeEnabled) "AGENT MODE ON" else "AGENT MODE OFF",
+                                                    color = if (aiConfig.isAgentModeEnabled) EmeraldPrimary else Slate400,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
                                     }
                                     Text(
                                         text = com.example.util.AppStrings.tr("Asisten Cerdas & Analis Bisnis FMCG", "Smart Assistant & FMCG Business Analyst", lang),
@@ -189,6 +221,17 @@ fun AiCopilotDialog(
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // Agent Mode sample action chip
+                        SuggestionChip(
+                            onClick = {
+                                val samplePrompt = if (lang == "EN") "Add a new outlet named 'Warung Barokah Bu Aminah', phone 081234567890, category WARUNG_KELONTONG, debt limit 500000." else "Tambahkan warung baru: 'Warung Barokah Bu Aminah', No HP 081234567890, kategori Toko Kelontong, limit hutang Rp 500.000."
+                                viewModel.sendAiChatMessage(samplePrompt)
+                            },
+                            icon = { Icon(Icons.Default.AddBusiness, contentDescription = null, tint = EmeraldPrimary, modifier = Modifier.size(14.dp)) },
+                            label = { Text(com.example.util.AppStrings.tr("⚡ Auto Tambah Warung", "⚡ Auto Add Warung", lang), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EmeraldPrimary) },
+                            colors = SuggestionChipDefaults.suggestionChipColors(containerColor = EmeraldPrimary.copy(alpha = 0.1f))
+                        )
+
                         SuggestionChip(
                             onClick = {
                                 viewModel.sendAiChatMessage(if (lang == "EN") "Create a WhatsApp report draft summarizing today's sales, cash collections, factory settlements, and outstanding credit." else "Buatkan draf laporan WhatsApp rekap hasil penjualan, kas, setoran pabrik, dan piutang hari ini untuk dikirim ke bos distributor.")
@@ -315,6 +358,20 @@ fun AiCopilotDialog(
                                                         fontSize = 11.5.sp,
                                                         color = Slate800
                                                     )
+                                                    if (msg.executedActions.isNotEmpty()) {
+                                                        Surface(
+                                                            color = EmeraldPrimary.copy(alpha = 0.15f),
+                                                            shape = RoundedCornerShape(4.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = "⚡ ${msg.executedActions.size} Aksi Sukses",
+                                                                color = EmeraldPrimary,
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                                 Text(
                                                     text = timeStr,
@@ -506,6 +563,7 @@ fun AiConfigDialog(
     var apiKey by remember { mutableStateOf(currentConfig.apiKey) }
     var model by remember { mutableStateOf(currentConfig.model) }
     var customPersona by remember { mutableStateOf(currentConfig.customPersona) }
+    var isAgentModeEnabled by remember { mutableStateOf(currentConfig.isAgentModeEnabled) }
     var isApiKeyVisible by remember { mutableStateOf(false) }
 
     var testStatusMessage by remember { mutableStateOf<String?>(null) }
@@ -738,7 +796,65 @@ fun AiConfigDialog(
                             }
                         }
 
-                        // 4. Custom User Persona & Instructions
+                        // 4. Agent Mode Switch (Function Calling)
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(containerColor = if (isAgentModeEnabled) Color(0xFFF0FDF4) else Slate50),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isAgentModeEnabled) Color(0xFFBBF7D0) else Slate200
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Bolt,
+                                        contentDescription = null,
+                                        tint = if (isAgentModeEnabled) EmeraldPrimary else Slate400,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            text = com.example.util.AppStrings.tr("Agent Mode (Function Calling)", "Agent Mode (Function Calling)", lang),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = if (isAgentModeEnabled) Color(0xFF166534) else Slate800
+                                        )
+                                        Text(
+                                            text = com.example.util.AppStrings.tr(
+                                                "Mengizinkan AI mengeksekusi langsung aksi seperti tambah warung, catat penjualan, pelunasan bon, dan update produk ke database.",
+                                                "Allows AI to directly execute actions such as adding warungs, recording sales, paying debts, and updating products in the database.",
+                                                lang
+                                            ),
+                                            fontSize = 10.5.sp,
+                                            color = if (isAgentModeEnabled) Color(0xFF15803D) else Slate500,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                }
+                                Switch(
+                                    checked = isAgentModeEnabled,
+                                    onCheckedChange = { isAgentModeEnabled = it },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = EmeraldPrimary
+                                    )
+                                )
+                            }
+                        }
+
+                        // 5. Custom User Persona & Instructions
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -871,7 +987,8 @@ fun AiConfigDialog(
                                     endpoint = endpoint,
                                     apiKey = apiKey,
                                     model = model,
-                                    customPersona = customPersona
+                                    customPersona = customPersona,
+                                    isAgentModeEnabled = isAgentModeEnabled
                                 )
                                 viewModel.updateAiConfig(newCfg)
                                 onDismiss()

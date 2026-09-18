@@ -58,6 +58,8 @@ import com.example.ui.theme.*
 import com.example.ui.viewmodel.SfaViewModel
 import com.example.ui.viewmodel.TransactionDialogState
 import com.example.util.AppStrings
+import com.example.util.CompassSensorHelper
+import com.example.util.MapMatchingHelper
 import com.example.util.LocationHelper
 import com.example.util.UserGpsLocation
 import com.example.util.maps.OsmRoutingEngine
@@ -149,6 +151,9 @@ fun MapsScreen(
     var downloadStatusText by remember { mutableStateOf("") }
     var cacheSizeMb by remember { mutableDoubleStateOf(0.0) }
 
+    // Physical Compass & Device Orientation Sensor (Magnetometer + Accelerometer / Rotation Vector)
+    val compassHeadingDeg by CompassSensorHelper.observeHeading(context).collectAsState(initial = 0f)
+
     // Navigation Mode (Real GPS vs Demo Simulation)
     var isSimulatingNav by remember { mutableStateOf(false) }
     var simGpsLat by remember { mutableDoubleStateOf(userGps.latitude) }
@@ -216,12 +221,24 @@ fun MapsScreen(
         cacheSizeMb = bytes / (1024.0 * 1024.0)
     }
 
-    // Effective GPS coordinate (Hardware or Simulation)
-    val effectiveGps = remember(isSimulatingNav, simGpsLat, simGpsLng, userGps) {
+    // Effective GPS coordinate (Hardware, Filtered, Snap-to-Route, or Simulation)
+    val effectiveGps = remember(isSimulatingNav, simGpsLat, simGpsLng, userGps, roadRouteResult) {
         if (isSimulatingNav) {
             UserGpsLocation(simGpsLat, simGpsLng, accuracyMeter = 5f, provider = "SIMULATOR")
         } else {
-            userGps
+            val routePolyline = roadRouteResult?.polylinePoints
+            if (!routePolyline.isNullOrEmpty() && routePolyline.size >= 2 && userGps.latitude != 0.0) {
+                // Apply Snap-to-Route map matching if salesman is within 25 meters of the planned route
+                val snapped = MapMatchingHelper.snapToRoute(
+                    lat = userGps.latitude,
+                    lng = userGps.longitude,
+                    routeWaypoints = routePolyline,
+                    snapThresholdMeters = 25.0
+                )
+                userGps.copy(latitude = snapped.first, longitude = snapped.second)
+            } else {
+                userGps
+            }
         }
     }
 
@@ -725,58 +742,88 @@ fun MapsScreen(
                     style = Stroke(width = 1.dp.toPx())
                 )
 
-                val effectiveBearing = if (isSimulatingNav) simVehicleBearingDeg else effectiveGps.bearing
-                val hasDirection = isSimulatingNav || (effectiveGps.hasBearing && effectiveGps.speedMps > 0.4f)
+                // Determine effective bearing:
+                // If moving fast: use GPS bearing. If standing still or walking: smoothly use physical Compass sensor!
+                val isMovingFast = effectiveGps.speedMps > 1.2f && effectiveGps.hasBearing
+                val effectiveHeadingDeg = when {
+                    isSimulatingNav -> simVehicleBearingDeg
+                    isMovingFast -> effectiveGps.bearing
+                    compassHeadingDeg != 0f -> compassHeadingDeg
+                    effectiveGps.hasBearing -> effectiveGps.bearing
+                    else -> 0f
+                }
 
-                if (hasDirection) {
-                    // Google Maps Navigation Vehicle Puck with Dynamic Forward Direction
+                val hasCompassBeam = isSimulatingNav || isMovingFast || compassHeadingDeg != 0f || effectiveGps.hasBearing
+
+                if (hasCompassBeam) {
+                    // Google Maps Navigation Vehicle Puck with Dynamic Forward Direction & Compass Beam
                     withTransform({
-                        rotate(degrees = effectiveBearing, pivot = userPos)
+                        rotate(degrees = effectiveHeadingDeg, pivot = userPos)
                     }) {
-                        // Forward Light Beam / Vision Cone
+                        // Forward Light Beam / Vision Cone (Like Google Maps Flashlight Beam)
                         val conePath = Path().apply {
                             moveTo(userPos.x, userPos.y)
-                            lineTo(userPos.x - 18.dp.toPx(), userPos.y - 42.dp.toPx())
-                            lineTo(userPos.x + 18.dp.toPx(), userPos.y - 42.dp.toPx())
+                            lineTo(userPos.x - 22.dp.toPx(), userPos.y - 48.dp.toPx())
+                            lineTo(userPos.x + 22.dp.toPx(), userPos.y - 48.dp.toPx())
                             close()
                         }
                         drawPath(
                             path = conePath,
                             brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xFF3B82F6).copy(alpha = 0.38f), Color.Transparent),
-                                startY = userPos.y - 42.dp.toPx(),
+                                colors = listOf(Color(0xFF3B82F6).copy(alpha = 0.42f), Color.Transparent),
+                                startY = userPos.y - 48.dp.toPx(),
                                 endY = userPos.y
                             )
                         )
                         // Outer Radar Pulse
                         drawCircle(
-                            color = Color(0xFF2563EB).copy(alpha = 0.22f),
-                            radius = 20.dp.toPx(),
+                            color = Color(0xFF2563EB).copy(alpha = 0.20f),
+                            radius = 18.dp.toPx(),
                             center = userPos
                         )
-                        // Directional Navigation Chevron/Arrow
-                        val arrowPath = Path().apply {
-                            moveTo(userPos.x, userPos.y - 14.dp.toPx()) // Tip
-                            lineTo(userPos.x - 10.dp.toPx(), userPos.y + 11.dp.toPx()) // Bottom Left
-                            lineTo(userPos.x, userPos.y + 5.dp.toPx()) // Center Indent
-                            lineTo(userPos.x + 10.dp.toPx(), userPos.y + 11.dp.toPx()) // Bottom Right
-                            close()
+
+                        if (isMovingFast || isSimulatingNav) {
+                            // Directional Navigation Chevron/Arrow when moving fast
+                            val arrowPath = Path().apply {
+                                moveTo(userPos.x, userPos.y - 14.dp.toPx()) // Tip
+                                lineTo(userPos.x - 10.dp.toPx(), userPos.y + 11.dp.toPx()) // Bottom Left
+                                lineTo(userPos.x, userPos.y + 5.dp.toPx()) // Center Indent
+                                lineTo(userPos.x + 10.dp.toPx(), userPos.y + 11.dp.toPx()) // Bottom Right
+                                close()
+                            }
+                            drawPath(
+                                path = arrowPath,
+                                color = Color.White,
+                                style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                            )
+                            drawPath(
+                                path = arrowPath,
+                                color = Color(0xFF2563EB)
+                            )
+                        } else {
+                            // High-precision Circular Core with Heading Pointer Pip (Google Maps style)
+                            drawCircle(
+                                color = Color.White,
+                                radius = 10.dp.toPx(),
+                                center = userPos
+                            )
+                            drawCircle(
+                                color = Color(0xFF2563EB),
+                                radius = 7.dp.toPx(),
+                                center = userPos
+                            )
+                            // Forward heading indicator pip on top of the circle
+                            drawCircle(
+                                color = Color(0xFF93C5FD),
+                                radius = 2.5.dp.toPx(),
+                                center = Offset(userPos.x, userPos.y - 8.dp.toPx())
+                            )
                         }
-                        // White border stroke
-                        drawPath(
-                            path = arrowPath,
-                            color = Color.White,
-                            style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                        )
-                        // Filled navigation chevron
-                        drawPath(
-                            path = arrowPath,
-                            color = Color(0xFF2563EB)
-                        )
-                        // Center white core
+
+                        // Center white core dot
                         drawCircle(
                             color = Color.White,
-                            radius = 3.dp.toPx(),
+                            radius = 2.5.dp.toPx(),
                             center = userPos
                         )
                     }
@@ -1506,7 +1553,9 @@ fun MapsScreen(
                     )
                     Text(
                         text = if (userGps.isAvailable) {
-                            "GPS: ±${userGps.accuracyMeter.toInt().coerceAtLeast(1)}m"
+                            val provTag = if (userGps.isFused) "Fused" else "GPS"
+                            val compassTag = if (compassHeadingDeg != 0f) " • ${compassHeadingDeg.toInt()}°" else ""
+                            "$provTag: ±${userGps.accuracyMeter.toInt().coerceAtLeast(1)}m$compassTag"
                         } else {
                             AppStrings.tr("Mencari Sinyal GPS", "Searching GPS Signal", lang)
                         },

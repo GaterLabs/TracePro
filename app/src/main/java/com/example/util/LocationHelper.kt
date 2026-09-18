@@ -12,6 +12,12 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.data.local.entity.RuteEntity
 import com.example.data.local.entity.WarungEntity
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -34,7 +40,10 @@ data class UserGpsLocation(
     val hasBearing: Boolean = false,
     val speedMps: Float = 0f,
     val altitude: Double = 0.0,
-    val timeMs: Long = 0L
+    val timeMs: Long = 0L,
+    val rawLatitude: Double = latitude,
+    val rawLongitude: Double = longitude,
+    val isFused: Boolean = false
 )
 
 object LocationHelper {
@@ -162,111 +171,152 @@ object LocationHelper {
     }
 
     /**
-     * Dapatkan Flow update lokasi GPS satelit & network terkini secara real-time.
-     * Didesain 100% responsif & offline-compatible untuk mendeteksi pergerakan secara instan.
+     * Dapatkan Flow update lokasi presisi tinggi menggunakan Google FusedLocationProviderClient
+     * (menggabungkan Satelit GNSS + Wi-Fi Positioning System + Cell Tower) dilengkapi
+     * GpsKalmanFilter untuk menghapus jitter/lonjakan sinyal saat salesman bergerak atau diam di outlet.
      */
     @SuppressLint("MissingPermission")
     fun observeCurrentLocation(context: Context): Flow<UserGpsLocation> = callbackFlow {
+        val kalmanFilter = GpsKalmanFilter()
+        val fusedClient = try {
+            LocationServices.getFusedLocationProviderClient(context)
+        } catch (_: Exception) {
+            null
+        }
+
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
 
-        if (locationManager == null) {
-            trySend(UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "None", isFresh = false))
-            close()
-            return@callbackFlow
-        }
-
-        // Bootstrap dengan lokasi terbaik yang tersedia di perangkat
-        var currentBestLocation: Location? = getBestLastKnownLocation(locationManager)
-        if (currentBestLocation != null) {
-            trySend(
-                UserGpsLocation(
-                    latitude = currentBestLocation.latitude,
-                    longitude = currentBestLocation.longitude,
-                    accuracyMeter = currentBestLocation.accuracy,
-                    isAvailable = true,
-                    provider = currentBestLocation.provider ?: "Cache",
-                    isFresh = isLocationFresh(currentBestLocation, 300),
-                    bearing = if (currentBestLocation.hasBearing()) currentBestLocation.bearing else 0f,
-                    hasBearing = currentBestLocation.hasBearing(),
-                    speedMps = if (currentBestLocation.hasSpeed()) currentBestLocation.speed else 0f,
-                    altitude = if (currentBestLocation.hasAltitude()) currentBestLocation.altitude else 0.0,
-                    timeMs = currentBestLocation.time
-                )
-            )
+        // 1. Emit instant bootstrap location immediately
+        val instant = getInstantLocation(context)
+        if (instant.isAvailable && instant.latitude != 0.0) {
+            val (sLat, sLng) = kalmanFilter.filter(instant.latitude, instant.longitude, instant.accuracyMeter)
+            trySend(instant.copy(latitude = sLat, longitude = sLng, rawLatitude = instant.latitude, rawLongitude = instant.longitude, isFused = fusedClient != null))
         } else {
-            trySend(UserGpsLocation(DEFAULT_LAT, DEFAULT_LNG, isAvailable = false, provider = "Mencari Sinyal GPS", isFresh = false))
+            trySend(instant)
         }
 
-        var lastEmittedLat = currentBestLocation?.latitude ?: 0.0
-        var lastEmittedLng = currentBestLocation?.longitude ?: 0.0
-        var lastEmittedTime = System.currentTimeMillis()
+        var currentBestLocation: Location? = getBestLastKnownLocation(context)
 
-        val listener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                // Gunakan filter isBetterLocation agar perpindahan lokasi akurat dan tidak melompat ke cell tower
-                if (!isBetterLocation(location, currentBestLocation)) {
-                    return
-                }
+        var isFusedActive = false
+        var isNativeActive = false
+        var locationCallback: LocationCallback? = null
+        var nativeListener: LocationListener? = null
 
-                currentBestLocation = location
-                val now = System.currentTimeMillis()
-                val isGps = location.provider == LocationManager.GPS_PROVIDER
+        // Try Fused Location Provider Client (Google Play Services) first
+        if (fusedClient != null) {
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+                .setMinUpdateIntervalMillis(500L)
+                .setMinUpdateDistanceMeters(0f)
+                .setMaxUpdateDelayMillis(1500L)
+                .build()
 
-                val dist = calculateDistanceMeters(lastEmittedLat, lastEmittedLng, location.latitude, location.longitude)
-                val timeDiff = now - lastEmittedTime
+            val cb = object : LocationCallback() {
+                override fun onLocationResult(result: LocationResult) {
+                    val loc = result.lastLocation ?: return
+                    if (loc.latitude == 0.0 && loc.longitude == 0.0) return
 
-                // Selalu emit jika GPS dapat fix baru yang lebih baik, atau berpindah >= 0.8 meter, atau berkala
-                if (lastEmittedLat == 0.0 || dist >= 0.8 || timeDiff >= 1000L || isGps) {
-                    lastEmittedLat = location.latitude
-                    lastEmittedLng = location.longitude
-                    lastEmittedTime = now
+                    currentBestLocation = loc
+                    val (smoothLat, smoothLng) = kalmanFilter.filter(loc.latitude, loc.longitude, loc.accuracy)
 
                     trySend(
                         UserGpsLocation(
-                            latitude = location.latitude,
-                            longitude = location.longitude,
+                            latitude = smoothLat,
+                            longitude = smoothLng,
+                            accuracyMeter = loc.accuracy,
+                            isAvailable = true,
+                            provider = "Google Fused (GNSS+Wi-Fi)",
+                            isFresh = true,
+                            bearing = if (loc.hasBearing()) loc.bearing else 0f,
+                            hasBearing = loc.hasBearing(),
+                            speedMps = if (loc.hasSpeed()) loc.speed else 0f,
+                            altitude = if (loc.hasAltitude()) loc.altitude else 0.0,
+                            timeMs = loc.time,
+                            rawLatitude = loc.latitude,
+                            rawLongitude = loc.longitude,
+                            isFused = true
+                        )
+                    )
+                }
+            }
+            locationCallback = cb
+
+            try {
+                fusedClient.requestLocationUpdates(locationRequest, cb, android.os.Looper.getMainLooper())
+                isFusedActive = true
+            } catch (_: Exception) {
+                isFusedActive = false
+            }
+        }
+
+        // Fallback: Native Android LocationManager (Multi-Provider: GPS + Network + Passive)
+        if (!isFusedActive && locationManager != null) {
+            val listener = object : LocationListener {
+                override fun onLocationChanged(location: Location) {
+                    if (!isBetterLocation(location, currentBestLocation)) return
+                    currentBestLocation = location
+
+                    val isGps = location.provider == LocationManager.GPS_PROVIDER
+                    val (smoothLat, smoothLng) = kalmanFilter.filter(location.latitude, location.longitude, location.accuracy)
+
+                    trySend(
+                        UserGpsLocation(
+                            latitude = smoothLat,
+                            longitude = smoothLng,
                             accuracyMeter = location.accuracy,
                             isAvailable = true,
-                            provider = if (isGps) "Satelit GPS" else (location.provider ?: "Network"),
+                            provider = if (isGps) "Satelit Standalone" else (location.provider ?: "Network"),
                             isFresh = true,
                             bearing = if (location.hasBearing()) location.bearing else 0f,
                             hasBearing = location.hasBearing(),
                             speedMps = if (location.hasSpeed()) location.speed else 0f,
                             altitude = if (location.hasAltitude()) location.altitude else 0.0,
-                            timeMs = location.time
+                            timeMs = location.time,
+                            rawLatitude = location.latitude,
+                            rawLongitude = location.longitude,
+                            isFused = false
                         )
                     )
                 }
-            }
 
-            @Deprecated("Deprecated in Java")
-            override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
-            override fun onProviderEnabled(provider: String) {}
-            override fun onProviderDisabled(provider: String) {}
+                @Deprecated("Deprecated in Java")
+                override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                override fun onProviderEnabled(provider: String) {}
+                override fun onProviderDisabled(provider: String) {}
+            }
+            nativeListener = listener
+
+            try {
+                val mainLooper = android.os.Looper.getMainLooper()
+                val providers = listOfNotNull(
+                    LocationManager.GPS_PROVIDER.takeIf { locationManager.isProviderEnabled(it) },
+                    LocationManager.NETWORK_PROVIDER.takeIf { locationManager.isProviderEnabled(it) },
+                    LocationManager.PASSIVE_PROVIDER
+                )
+                for (prov in providers) {
+                    try {
+                        locationManager.requestLocationUpdates(prov, 1000L, 0f, listener, mainLooper)
+                        isNativeActive = true
+                    } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
         }
 
-        try {
-            val mainLooper = android.os.Looper.getMainLooper()
-            val providers = listOfNotNull(
-                LocationManager.GPS_PROVIDER.takeIf { locationManager.isProviderEnabled(it) },
-                LocationManager.NETWORK_PROVIDER.takeIf { locationManager.isProviderEnabled(it) },
-                LocationManager.PASSIVE_PROVIDER
-            )
-
-            for (prov in providers) {
-                try {
-                    // Update GPS setiap 1 detik dan 0 meter threshold agar perpindahan terdeteksi kontinu tanpa jeda
-                    locationManager.requestLocationUpdates(prov, 1000L, 0f, listener, mainLooper)
-                } catch (_: Exception) {}
-            }
-        } catch (_: SecurityException) {
-        } catch (_: Exception) {}
+        if (!isFusedActive && !isNativeActive) {
+            close()
+            return@callbackFlow
+        }
 
         awaitClose {
-            try {
-                locationManager.removeUpdates(listener)
-            } catch (_: SecurityException) {
-            } catch (_: Exception) {}
+            if (isFusedActive && locationCallback != null && fusedClient != null) {
+                try {
+                    fusedClient.removeLocationUpdates(locationCallback)
+                } catch (_: Exception) {}
+            }
+            if (isNativeActive && nativeListener != null && locationManager != null) {
+                try {
+                    locationManager.removeUpdates(nativeListener)
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -343,7 +393,42 @@ object LocationHelper {
             return@suspendCancellableCoroutine
         }
 
-        // Periksa apakah ada provider lokasi yang aktif
+        val fusedClient = try {
+            LocationServices.getFusedLocationProviderClient(context)
+        } catch (_: Exception) {
+            null
+        }
+
+        // Coba FusedLocationProviderClient terlebih dahulu (prioritas tertinggi Play Services)
+        if (fusedClient != null) {
+            try {
+                fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                    .addOnSuccessListener { fusedLoc ->
+                        if (fusedLoc != null && fusedLoc.latitude != 0.0 && fusedLoc.accuracy <= targetAccuracyMeters) {
+                            if (continuation.isActive) {
+                                continuation.resumeWith(
+                                    Result.success(
+                                        UserGpsLocation(
+                                            latitude = fusedLoc.latitude,
+                                            longitude = fusedLoc.longitude,
+                                            accuracyMeter = fusedLoc.accuracy,
+                                            isAvailable = true,
+                                            provider = "Google Fused (Presisi Tinggi)",
+                                            isFresh = true,
+                                            bearing = if (fusedLoc.hasBearing()) fusedLoc.bearing else 0f,
+                                            hasBearing = fusedLoc.hasBearing(),
+                                            speedMps = if (fusedLoc.hasSpeed()) fusedLoc.speed else 0f,
+                                            altitude = if (fusedLoc.hasAltitude()) fusedLoc.altitude else 0.0,
+                                            timeMs = fusedLoc.time,
+                                            isFused = true
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    }
+            } catch (_: Exception) {}
+        }
         var isGpsEnabled = false
         var isNetEnabled = false
         try {

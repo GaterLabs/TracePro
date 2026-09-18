@@ -6,13 +6,15 @@ data class AiConfig(
     val model: String = "auto",
     val customPersona: String = "",
     val temperature: Double = 0.7,
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val isAgentModeEnabled: Boolean = true
 )
 
 data class AiChatMessage(
     val role: String, // "system", "user", "assistant"
     val content: String,
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val executedActions: List<AiToolExecutionResult> = emptyList()
 )
 
 data class OpenAiChatRequest(
