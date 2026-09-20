@@ -26,11 +26,37 @@ object OsmTileEngine {
     private const val USER_AGENT = "SFASalesMobile/2.0 (Android; OpenStreetMap Integration)"
     private const val TILE_SIZE = 256
 
-    // In-memory LRU Cache (keeps up to 150 loaded tiles for zero lag panning)
-    private val memoryCache = object : LruCache<String, ImageBitmap>(150) {}
+    // In-memory LRU Cache (expanded to 600 tiles for ultra-smooth 60+ FPS panning & zooming)
+    private val memoryCache = object : LruCache<String, ImageBitmap>(600) {}
 
     // In-flight fetch tracking to prevent duplicate network calls
-    private val activeFetches = mutableSetOf<String>()
+    private val activeFetches = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /**
+     * Instantly retrieve tile from memory LRU cache without coroutines or disk I/O.
+     */
+    fun getMemoryCachedTile(style: MapLayerStyle, z: Int, x: Int, y: Int): ImageBitmap? {
+        val cacheKey = "${style.name}_${z}_${x}_$y"
+        synchronized(memoryCache) {
+            return memoryCache.get(cacheKey)
+        }
+    }
+
+    /**
+     * Retrieve parent zoom level tile (z-1) from memory to prevent blank canvas while loading.
+     * Returns Triple(ParentBitmap, quadrantX 0..1, quadrantY 0..1).
+     */
+    fun getParentMemoryCachedTile(style: MapLayerStyle, z: Int, x: Int, y: Int): Triple<ImageBitmap, Int, Int>? {
+        if (z <= 3) return null
+        val parentZ = z - 1
+        val parentX = x / 2
+        val parentY = y / 2
+        val parentKey = "${style.name}_${parentZ}_${parentX}_$parentY"
+        val bmp = synchronized(memoryCache) { memoryCache.get(parentKey) } ?: return null
+        val quadX = (x % 2).coerceIn(0, 1)
+        val quadY = (y % 2).coerceIn(0, 1)
+        return Triple(bmp, quadX, quadY)
+    }
 
     /**
      * Get Tile URL template based on selected map style

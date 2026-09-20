@@ -307,7 +307,9 @@ class SfaRepository(private val dao: SfaDao) {
         gpsLat: Double,
         gpsLng: Double,
         gpsAddress: String,
-        catatan: String
+        catatan: String,
+        tarikLayakPcs: Int = sisaFisik,
+        tarikBsPcs: Int = 0
     ) {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val pcsLaku = (sisaTitipanLalu - sisaFisik).coerceAtLeast(0)
@@ -322,12 +324,13 @@ class SfaRepository(private val dao: SfaDao) {
         }
 
         // Update 4 Virtual Drawers:
-        // - Tambah stok_bs_belum_sortir dari BS tarikan (sisaFisik)
+        // - Tambah stokPribadiLayakJual dari tarikan yang masih bagus (siap rolling/repack di jalan)
+        // - Tambah stokBsBelumSortir dari tarikan yang rusak/melempem/tengik
         // - Kurangi restock dari Fresh atau Pribadi
         val currentDrawer = dao.getDrawerByProductId(productId) ?: InventoryDrawerEntity(productId = productId)
         var freshCount = currentDrawer.stokFreshPabrikPcs
-        var pribadiCount = currentDrawer.stokPribadiLayakJualPcs
-        val bsCount = currentDrawer.stokBsBelumSortirPcs + sisaFisik
+        var pribadiCount = (currentDrawer.stokPribadiLayakJualPcs + tarikLayakPcs).coerceAtLeast(0)
+        val bsCount = currentDrawer.stokBsBelumSortirPcs + tarikBsPcs
 
         if (sumberRestock == "FRESH_PABRIK") {
             freshCount = (freshCount - restockPcs).coerceAtLeast(0)
@@ -379,13 +382,13 @@ class SfaRepository(private val dao: SfaDao) {
             uangDiterima = uangDiterima,
             saldoPiutangBaru = saldoPiutangBaru,
             statusBayar = statusBayar,
-            bsDitarikPcs = sisaFisik,
+            bsDitarikPcs = tarikBsPcs,
             restockBaruPcs = restockPcs,
             totalTitipanAktifPcs = restockPcs,
             gpsLat = gpsLat,
             gpsLng = gpsLng,
             gpsAddress = gpsAddress,
-            catatan = catatan
+            catatan = if (tarikLayakPcs > 0 || tarikBsPcs > 0) "[Tarik Layak: $tarikLayakPcs Pcs, BS: $tarikBsPcs Pcs] $catatan".trim() else catatan
         )
         dao.insertTransaction(transaction)
     }

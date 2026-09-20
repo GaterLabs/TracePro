@@ -72,17 +72,24 @@ fun AiCopilotDialog(
             onDismissRequest = onDismiss,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Card(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.96f)
-                    .fillMaxHeight(0.94f),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFFF8FAFC),
-                    contentColor = Slate900
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    .fillMaxSize()
+                    .imePadding()
+                    .systemBarsPadding(),
+                contentAlignment = Alignment.Center
             ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.96f)
+                        .fillMaxHeight(0.96f),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color(0xFFF8FAFC),
+                        contentColor = Slate900
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -546,6 +553,7 @@ fun AiCopilotDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -575,13 +583,20 @@ fun AiConfigDialog(
             onDismissRequest = onDismiss,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Card(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.96f)
-                    .fillMaxHeight(0.92f),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900)
+                    .fillMaxSize()
+                    .imePadding()
+                    .systemBarsPadding(),
+                contentAlignment = Alignment.Center
             ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.96f)
+                        .fillMaxHeight(0.96f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900)
+                ) {
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -1005,6 +1020,7 @@ fun AiConfigDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -1032,13 +1048,20 @@ fun AiOutletRecommendationDialog(
             onDismissRequest = onDismiss,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            Card(
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.94f)
-                    .fillMaxHeight(0.80f),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900)
+                    .fillMaxSize()
+                    .imePadding()
+                    .systemBarsPadding(),
+                contentAlignment = Alignment.Center
             ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.94f)
+                        .fillMaxHeight(0.85f),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900)
+                ) {
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -1187,6 +1210,7 @@ fun AiOutletRecommendationDialog(
                     }
                 }
             }
+        }
         }
     }
 }

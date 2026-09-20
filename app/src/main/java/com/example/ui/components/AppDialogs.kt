@@ -152,7 +152,7 @@ val activeDialog by viewModel.activeTransactionDialog.collectAsState()
                 onNavigateToMuatPagi = {
                     viewModel.openTransactionDialog(TransactionDialogState.MuatPagi)
                 },
-                onSubmit = { productId, sisaLalu, sisaFisik, harga, bayar, restock, sumber, lat, lng, addr, note ->
+                onSubmit = { productId, sisaLalu, sisaFisik, harga, bayar, restock, sumber, lat, lng, addr, note, tarikLayak, tarikBs ->
                     viewModel.executeTarikSisaDanRestock(
                         warung = currentWarung,
                         productId = productId,
@@ -165,7 +165,9 @@ val activeDialog by viewModel.activeTransactionDialog.collectAsState()
                         gpsLat = lat,
                         gpsLng = lng,
                         gpsAddress = addr,
-                        catatan = note
+                        catatan = note,
+                        tarikLayakPcs = tarikLayak,
+                        tarikBsPcs = tarikBs
                     )
                 }
             )
@@ -430,17 +432,24 @@ val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).forma
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.96f)
-                .fillMaxHeight(0.94f)
-                .padding(vertical = 8.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.96f)
+                    .fillMaxHeight(0.96f)
+                    .padding(vertical = 4.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1072,6 +1081,7 @@ val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).forma
                 }
             }
         }
+        }
     }
 }
 
@@ -1099,19 +1109,26 @@ val product = remember(products, loading.productId) { products.find { it.id == l
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.92f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900),
                 modifier = Modifier
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxWidth(0.92f)
+                    .padding(vertical = 8.dp)
             ) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1307,6 +1324,7 @@ val product = remember(products, loading.productId) { products.find { it.id == l
                 }
             }
         }
+        }
     }
 }
 
@@ -1370,16 +1388,23 @@ fun TitipBaruDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -1791,6 +1816,7 @@ fun TitipBaruDialog(
                 }
             }
         }
+        }
     }
 }
 
@@ -1806,7 +1832,7 @@ fun TarikSisaDialog(
     onDismiss: () -> Unit,
     onNavigateToMuatPagi: () -> Unit = {
 },
-    onSubmit: (productId: String, sisaLalu: Int, sisaFisik: Int, harga: Double, bayar: Double, restock: Int, sumberRestock: String, lat: Double, lng: Double, addr: String, note: String) -> Unit
+    onSubmit: (productId: String, sisaLalu: Int, sisaFisik: Int, harga: Double, bayar: Double, restock: Int, sumberRestock: String, lat: Double, lng: Double, addr: String, note: String, tarikLayak: Int, tarikBs: Int) -> Unit
 ) {
     val lang = LocalAppLanguage.current
 
@@ -1858,6 +1884,9 @@ fun TarikSisaDialog(
     var catatanTransaksi by remember { mutableStateOf(warung.notes) }
 
     val sisaFisik = sisaFisikInput.toIntOrNull() ?: 0
+    var tarikLayakJualInput by remember(sisaFisik) { mutableStateOf("$sisaFisik") }
+    val tarikLayak = (tarikLayakJualInput.toIntOrNull() ?: sisaFisik).coerceIn(0, sisaFisik)
+    val tarikBs = (sisaFisik - tarikLayak).coerceAtLeast(0)
     val pcsLaku = (sisaTitipanLalu - sisaFisik).coerceAtLeast(0)
     val hargaSatuan = hargaSatuanInput.toDoubleOrNull() ?: defaultHarga
     val subtotalLaku = pcsLaku * hargaSatuan
@@ -1876,16 +1905,23 @@ fun TarikSisaDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -2129,6 +2165,96 @@ fun TarikSisaDialog(
                                     border = if (isUtuhSelected) null else androidx.compose.foundation.BorderStroke(1.dp, AmberBorder),
                                     modifier = Modifier.height(28.dp)
                                 )
+                            }
+                        }
+
+                        // Alokasi Fisik Tarikan (Bagus / Rolling Repack vs Melempem / BS)
+                        if (sisaFisik > 0) {
+                            Card(
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BlueBorder)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "📦 Alokasi Sisa Ditarik ($sisaFisik $satuanKecil):",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Slate900
+                                        )
+                                        Text(
+                                            text = if (tarikBs == 0) "100% Bagus / Renyah" else "$tarikLayak Bagus, $tarikBs BS",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (tarikBs == 0) EmeraldSuccess else RoseDanger
+                                        )
+                                    }
+                                    Text(
+                                        text = "Barang yang belum melempem/tengik langsung masuk laci rolling mobil (siap dipack ulang di jalan & dititipkan ke warung lain).",
+                                        fontSize = 10.sp,
+                                        color = Slate600,
+                                        lineHeight = 14.sp
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        OutlinedTextField(
+                                            value = tarikLayakJualInput,
+                                            onValueChange = {
+                                                val num = it.toIntOrNull() ?: 0
+                                                if (num <= sisaFisik) {
+                                                    tarikLayakJualInput = it
+                                                }
+                                            },
+                                            label = { Text("Layak Jual / Rolling ($satuanKecil)", fontSize = 10.sp) },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            colors = appTextFieldColors(),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            singleLine = true
+                                        )
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (tarikBs > 0) RoseSurface else Slate100,
+                                            modifier = Modifier.weight(1f).height(54.dp),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, if (tarikBs > 0) RoseBorder else Slate200)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                                verticalArrangement = Arrangement.Center
+                                            ) {
+                                                Text("BS Rusak / Melempem:", fontSize = 9.sp, color = if (tarikBs > 0) RoseDanger else Slate500)
+                                                Text("$tarikBs $satuanKecil", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (tarikBs > 0) RoseDanger else Slate700)
+                                            }
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        FilterChip(
+                                            selected = tarikLayak == sisaFisik,
+                                            onClick = { tarikLayakJualInput = "$sisaFisik" },
+                                            label = { Text("✅ Semua Bagus (Siap Rolling)", fontSize = 10.sp) },
+                                            shape = RoundedCornerShape(6.dp)
+                                        )
+                                        FilterChip(
+                                            selected = tarikLayak == 0,
+                                            onClick = { tarikLayakJualInput = "0" },
+                                            label = { Text("⚠️ Semua Melempem/BS", fontSize = 10.sp) },
+                                            shape = RoundedCornerShape(6.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -2490,7 +2616,9 @@ fun TarikSisaDialog(
                                     warung.latitude,
                                     warung.longitude,
                                     warung.alamatLengkap,
-                                    catatanTransaksi
+                                    catatanTransaksi,
+                                    tarikLayak,
+                                    tarikBs
                                 )
                             }
                         },
@@ -2504,6 +2632,7 @@ fun TarikSisaDialog(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -2539,16 +2668,23 @@ var selectedProductIndex by remember { mutableStateOf(0) }
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -2632,6 +2768,7 @@ var selectedProductIndex by remember { mutableStateOf(0) }
                 }
             }
         }
+        }
     }
 }
 
@@ -2652,25 +2789,24 @@ fun ClosingSoreDialog(
 val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()).format(java.util.Date()) }
     val todayLoadings = remember(loadings, today) { loadings.filter { it.tanggal == today } }
 
-    // Dapatkan daftar produk yang dimuat hari ini atau ada stok fisik
-    val loadedProductIds = remember(todayLoadings, products, drawers) {
-        val fromLoadings = todayLoadings.map { it.productId }.distinct()
-        if (fromLoadings.isNotEmpty()) {
-            fromLoadings
-        } else {
-            val fromDrawers = products.filter { p ->
-                (drawers.find { it.productId == p.id }?.stokFreshPabrikPcs ?: 0) > 0
-            }.map { it.id }
-            if (fromDrawers.isNotEmpty()) fromDrawers else products.map { it.id }
-        }
+    // Dapatkan daftar produk awal yang dimuat hari ini, ada transaksi hari ini, atau ada stok di laci
+    val initialProductIds = remember(todayLoadings, products, drawers, transactions) {
+        val fromLoadings = todayLoadings.map { it.productId }
+        val fromTransactions = transactions.filter { it.tanggal == today }.map { it.productId }
+        val fromDrawers = drawers.filter { (it.stokFreshPabrikPcs > 0 || it.stokPribadiLayakJualPcs > 0 || it.stokBsBelumSortirPcs > 0) }.map { it.productId }
+        val combined = (fromLoadings + fromTransactions + fromDrawers).distinct()
+        if (combined.isNotEmpty()) combined else products.take(5).map { it.id }
     }
+
+    val dynamicProductIds = remember { mutableStateListOf<String>().apply { addAll(initialProductIds) } }
+    var showAddSkuDialog by remember { mutableStateOf(false) }
 
     val sisaDusInputs = remember { mutableStateMapOf<String, String>() }
     val sisaPcsInputs = remember { mutableStateMapOf<String, String>() }
 
     // Inisialisasi input state untuk masing-masing produk
-    LaunchedEffect(loadedProductIds) {
-        loadedProductIds.forEach { pId ->
+    LaunchedEffect(dynamicProductIds.toList()) {
+        dynamicProductIds.forEach { pId ->
             if (!sisaDusInputs.containsKey(pId)) {
                 val existingClosingDus = todayLoadings.filter { it.productId == pId }.lastOrNull()?.sisaDusSore ?: 0
                 sisaDusInputs[pId] = if (existingClosingDus > 0) existingClosingDus.toString() else "0"
@@ -2682,7 +2818,7 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
     }
 
     // Kalkulasi per produk
-    val productSummaries = loadedProductIds.mapNotNull { pId ->
+    val productSummaries = dynamicProductIds.mapNotNull { pId ->
         val product = products.find { it.id == pId } ?: return@mapNotNull null
         val pLoadings = todayLoadings.filter { it.productId == pId }
         val pabrik = pabriks.find { it.id == product.pabrikId }
@@ -2698,7 +2834,8 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
         val sisaTotalPcs = (sisaDus * rasio) + sisaPcsLepasan
         val pcsTerdistribusi = (totalMuatPcs - sisaTotalPcs).coerceAtLeast(0)
         val terjualDusEquivalent = if (rasio > 0) pcsTerdistribusi.toDouble() / rasio else 0.0
-        val tagihanPabrik = terjualDusEquivalent * hargaBeliDus
+        // Barang rolling/repack jalanan tidak dimuat dari pabrik, setoran ke pabrik = Rp 0 (bukan hutang supplier)
+        val tagihanPabrik = if (totalMuatDus > 0) terjualDusEquivalent * hargaBeliDus else 0.0
 
         ClosingProductSummary(
             productId = pId,
@@ -2753,17 +2890,24 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.92f)
-                .padding(vertical = 12.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .fillMaxHeight(0.96f)
+                    .padding(vertical = 4.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -2898,13 +3042,13 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
                                                 }
                                                 Surface(
                                                     shape = RoundedCornerShape(6.dp),
-                                                    color = Slate200
+                                                    color = if (prod.totalMuatDus > 0) Slate200 else Color(0xFFDCFCE7)
                                                 ) {
                                                     Text(
-                                                        text = "Muat: ${prod.totalMuatDus} ${prod.satuanBesar} (${prod.totalMuatPcs} Pcs)",
+                                                        text = if (prod.totalMuatDus > 0) "Muat: ${prod.totalMuatDus} ${prod.satuanBesar} (${prod.totalMuatPcs} Pcs)" else "🔄 Rolling / Repack Jalanan",
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = Slate800,
+                                                        color = if (prod.totalMuatDus > 0) Slate800 else EmeraldSuccess,
                                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                                     )
                                                 }
@@ -2948,13 +3092,21 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
                                                     Text(
-                                                        text = "Terjual: ${prod.pcsTerdistribusi} Pcs (~${String.format(java.util.Locale.US, "%.1f", prod.terjualDusEquivalent)} ${prod.satuanBesar})",
+                                                        text = if (prod.totalMuatDus > 0) {
+                                                            "Terjual: ${prod.pcsTerdistribusi} Pcs (~${String.format(java.util.Locale.US, "%.1f", prod.terjualDusEquivalent)} ${prod.satuanBesar})"
+                                                        } else {
+                                                            "Sisa Fisik: ${prod.sisaTotalPcsSore} Pcs (Stok Rolling)"
+                                                        },
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = EmeraldSuccess
                                                     )
                                                     Text(
-                                                        text = "Setoran: ${SfaViewModel.formatRupiah(prod.tagihanPabrik)}",
+                                                        text = if (prod.totalMuatDus > 0) {
+                                                            "Setoran: ${SfaViewModel.formatRupiah(prod.tagihanPabrik)}"
+                                                        } else {
+                                                            "Setoran: Rp 0 (Bukan Pabrik)"
+                                                        },
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = Slate900
@@ -2986,6 +3138,24 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
                                 }
                             }
                         }
+                    }
+
+                    // Tombol Tambah Produk Rolling / Repack Lainnya
+                    OutlinedButton(
+                        onClick = { showAddSkuDialog = true },
+                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BlueBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = BlueSurface)
+                    ) {
+                        Icon(Icons.Default.AddCircleOutline, contentDescription = null, tint = BlueAccent, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "+ Tambah Produk Rolling / Repack Lain ke Closing",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = BlueAccent
+                        )
                     }
 
                     // Rekap Total Kasir Card
@@ -3044,7 +3214,7 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
                     }
                     Button(
                         onClick = {
-                            val items = loadedProductIds.map { pId ->
+                            val items = dynamicProductIds.map { pId ->
                                 val dus = sisaDusInputs[pId]?.toIntOrNull() ?: 0
                                 val pcs = sisaPcsInputs[pId]?.toIntOrNull() ?: 0
                                 com.example.data.repository.ProductClosingInput(
@@ -3082,6 +3252,64 @@ val today = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale
                 }
             }
         }
+        }
+    }
+
+    if (showAddSkuDialog) {
+        val remainingProducts = products.filter { it.id !in dynamicProductIds }
+        AlertDialog(
+            onDismissRequest = { showAddSkuDialog = false },
+            title = {
+                Text(
+                    text = "Pilih Produk Rolling / Repack di Jalan",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Slate900
+                )
+            },
+            text = {
+                if (remainingProducts.isEmpty()) {
+                    Text("Semua produk dalam katalog sudah masuk dalam daftar closing sore.", fontSize = 12.sp, color = Slate600)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(remainingProducts) { p ->
+                            Card(
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = Slate100),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        dynamicProductIds.add(p.id)
+                                        sisaDusInputs[p.id] = "0"
+                                        sisaPcsInputs[p.id] = "0"
+                                        showAddSkuDialog = false
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(p.nama, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Slate900)
+                                        Text("Kategori: ${p.kategori} • 1 ${p.satuanBesar} = ${p.rasioKonversi} ${p.satuanKecil}", fontSize = 10.sp, color = Slate500)
+                                    }
+                                    Icon(Icons.Default.Add, contentDescription = null, tint = BlueAccent, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAddSkuDialog = false }) {
+                    Text("Tutup", fontWeight = FontWeight.Bold)
+                }
+            }
+        )
     }
 }
 
@@ -3787,16 +4015,23 @@ var alasan by remember { mutableStateOf("Warung Bangkrut / Tutup Permanen") }
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -3847,6 +4082,7 @@ var alasan by remember { mutableStateOf("Warung Bangkrut / Tutup Permanen") }
                 }
             }
         }
+        }
     }
 }
 
@@ -3883,16 +4119,23 @@ var nama by remember { mutableStateOf(product?.nama ?: "") }
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -4233,6 +4476,7 @@ var nama by remember { mutableStateOf(product?.nama ?: "") }
                 }
             }
         }
+        }
     }
 }
 
@@ -4255,16 +4499,23 @@ var namaPabrik by remember { mutableStateOf(pabrik?.namaPabrik ?: "") }
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -4311,6 +4562,7 @@ var namaPabrik by remember { mutableStateOf(pabrik?.namaPabrik ?: "") }
                     ) { Text(tr("Simpan", "Save", lang)) }
                 }
             }
+        }
         }
     }
 }
@@ -4431,30 +4683,37 @@ val context = LocalContext.current
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
                 modifier = Modifier
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column {
-                        Text(
-                            text = if (warung == null) "Tambah Master Outlet" else "Edit Master Outlet",
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = if (warung == null) "Tambah Master Outlet" else "Edit Master Outlet",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = Slate900
@@ -4474,6 +4733,78 @@ val context = LocalContext.current
 
                 HorizontalDivider(color = Slate200)
 
+                // Generator Sugesti Nama Toko (100% Non-Nama Orang, Berbasis Kategori, Titik Temu & Makna Niaga)
+                val nonPersonSuggestions = remember(kategoriWarung, alamat) {
+                    val locWord = when {
+                        alamat.contains("Pasar", ignoreCase = true) -> "Pasar"
+                        alamat.contains("Simpang", ignoreCase = true) -> "Simpang"
+                        alamat.contains("Stasiun", ignoreCase = true) -> "Stasiun"
+                        alamat.contains("Terminal", ignoreCase = true) -> "Terminal"
+                        alamat.contains("Mawar", ignoreCase = true) -> "Mawar"
+                        alamat.contains("Melati", ignoreCase = true) -> "Melati"
+                        alamat.contains("Merdeka", ignoreCase = true) -> "Merdeka"
+                        alamat.contains("Beringin", ignoreCase = true) -> "Beringin"
+                        alamat.contains("Pojok", ignoreCase = true) -> "Pojok"
+                        alamat.contains("Jembatan", ignoreCase = true) -> "Jembatan"
+                        alamat.contains("Masjid", ignoreCase = true) -> "Masjid"
+                        alamat.contains("Raya", ignoreCase = true) -> "Raya"
+                        else -> ""
+                    }
+
+                    when (kategoriWarung.lowercase()) {
+                        "warkop" -> listOf(
+                            if (locWord.isNotBlank()) "Warkop $locWord Jaya" else "Warkop Pojok Santai",
+                            "Warkop Simpang Empat",
+                            "Warkop Berkah Rejeki",
+                            "Kedai Kopi Sahabat",
+                            "Warkop Sinar Harapan",
+                            "Warkop Sedulur Makmur"
+                        )
+                        "sembako" -> listOf(
+                            if (locWord.isNotBlank()) "Toko Sembako $locWord" else "Toko Sembako Berkah",
+                            "Pusat Sembako Makmur",
+                            "Kios Sembako Barokah",
+                            "Toko Sembako Sumber Rejeki",
+                            "Gudang Sembako Sentosa",
+                            "Kios Sembako Lancar"
+                        )
+                        "kantin/kios" -> listOf(
+                            if (locWord.isNotBlank()) "Kios $locWord Asri" else "Kios Pojok Berkah",
+                            "Kios Barokah Mart",
+                            "Kantin Sejahtera Mandiri",
+                            "Depot Sumber Rejeki",
+                            "Kios Simpang Lima",
+                            "Kios Harapan Jaya"
+                        )
+                        "minimarket" -> listOf(
+                            if (locWord.isNotBlank()) "$locWord Mart" else "Berkah Mart",
+                            "Barokah Express",
+                            "Sumber Makmur Mart",
+                            "Prima Jaya Mart",
+                            "Mitra Mandiri Mart",
+                            "Sentosa Mart"
+                        )
+                        "grosir" -> listOf(
+                            if (locWord.isNotBlank()) "Pusat Grosir $locWord" else "Pusat Grosir Berkah",
+                            "Grosir Makmur Abadi",
+                            "Sentosa Grosir",
+                            "Grosir Sumber Rejeki",
+                            "Grosir Bintang Jaya",
+                            "Grosir Serba Ada"
+                        )
+                        else -> listOf(
+                            if (locWord.isNotBlank()) "Warung $locWord Berkah" else "Warung Berkah Jaya",
+                            "Toko Sumber Rejeki",
+                            "Warung Pojok Jaya",
+                            "Kios Makmur Sentosa",
+                            "Toko Barokah Sejahtera",
+                            "Warung Sederhana Makmur",
+                            "Toko Bintang Terang",
+                            "Warung Serba Ada"
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = namaWarung,
                     onValueChange = { namaWarung = it },
@@ -4482,8 +4813,69 @@ val context = LocalContext.current
                     singleLine = true,
                     colors = appTextFieldColors(),
                     shape = RoundedCornerShape(10.dp),
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                val currentIdx = nonPersonSuggestions.indexOf(namaWarung)
+                                val nextIdx = if (currentIdx >= 0) (currentIdx + 1) % nonPersonSuggestions.size else (0 until nonPersonSuggestions.size).random()
+                                namaWarung = nonPersonSuggestions[nextIdx]
+                            }
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = "Acak Nama Toko", tint = BlueAccent)
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // Rekomendasi Nama Cepat (Non-Nama Orang)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "💡 REKOMENDASI NAMA TOKO (NON-NAMA ORANG):",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            color = Slate500,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "1-Klik Pilih",
+                            fontSize = 10.sp,
+                            color = BlueAccent,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        nonPersonSuggestions.forEach { suggestedName ->
+                            val isCurrent = namaWarung == suggestedName
+                            SuggestionChip(
+                                onClick = { namaWarung = suggestedName },
+                                label = {
+                                    Text(
+                                        text = suggestedName,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                colors = SuggestionChipDefaults.suggestionChipColors(
+                                    containerColor = if (isCurrent) BlueAccent else Slate100,
+                                    labelColor = if (isCurrent) Color.White else Slate800
+                                ),
+                                border = if (isCurrent) null else androidx.compose.foundation.BorderStroke(1.dp, Slate300),
+                                modifier = Modifier.height(30.dp)
+                            )
+                        }
+                    }
+                }
 
                 // Kategori Outlet Fast Chips
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -4965,6 +5357,7 @@ val context = LocalContext.current
             }
         }
     }
+}
 
     if (showInAppCamera) {
         InAppCameraDialog(
@@ -4993,16 +5386,23 @@ var namaRute by remember { mutableStateOf(rute?.namaRute ?: "") }
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -5034,6 +5434,7 @@ var namaRute by remember { mutableStateOf(rute?.namaRute ?: "") }
                     ) { Text(tr("Simpan", "Save", lang)) }
                 }
             }
+        }
         }
     }
 }
@@ -5183,14 +5584,21 @@ fun OutletStatisticsDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.96f)
-                .fillMaxHeight(0.94f)
-                .padding(vertical = 8.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Slate900),
+                modifier = Modifier
+                    .fillMaxWidth(0.96f)
+                    .fillMaxHeight(0.96f)
+                    .padding(vertical = 4.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -5995,6 +6403,7 @@ fun OutletStatisticsDialog(
                 }
             }
         }
+        }
     }
 
     // Interactive Full Receipt / Faktur Thermal Dialog (Sama persis dengan Struk di Laporan)
@@ -6169,16 +6578,23 @@ var namaSalesman by remember { mutableStateOf(currentProfile?.namaSalesman ?: ""
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -6313,6 +6729,7 @@ var namaSalesman by remember { mutableStateOf(currentProfile?.namaSalesman ?: ""
                 }
             }
         }
+        }
     }
 }
 
@@ -6337,16 +6754,23 @@ var editingProduct by remember { mutableStateOf<ProductEntity?>(null) }
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -6507,6 +6931,7 @@ var editingProduct by remember { mutableStateOf<ProductEntity?>(null) }
                     Text(tr("Selesai", "Finish", lang))
                 }
             }
+        }
         }
     }
 }
@@ -7148,16 +7573,23 @@ val context = LocalContext.current
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color.White,
-                contentColor = Slate900
-            ),
+        Box(
             modifier = Modifier
-                .fillMaxWidth(0.94f)
-                .padding(vertical = 16.dp)
+                .fillMaxSize()
+                .imePadding()
+                .systemBarsPadding(),
+            contentAlignment = Alignment.Center
         ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White,
+                    contentColor = Slate900
+                ),
+                modifier = Modifier
+                    .fillMaxWidth(0.94f)
+                    .padding(vertical = 8.dp)
+            ) {
             Column(
                 modifier = Modifier
                     .padding(20.dp)
@@ -7344,6 +7776,7 @@ val context = LocalContext.current
                     Text(tr("Tutup", "Close", lang))
                 }
             }
+        }
         }
     }
 }

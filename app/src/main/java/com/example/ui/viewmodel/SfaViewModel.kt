@@ -389,7 +389,9 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
         gpsLat: Double,
         gpsLng: Double,
         gpsAddress: String,
-        catatan: String
+        catatan: String,
+        tarikLayakPcs: Int = sisaFisik,
+        tarikBsPcs: Int = 0
     ) {
         viewModelScope.launch {
             repository.processTarikSisaDanRestock(
@@ -404,9 +406,11 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                 gpsLat = gpsLat,
                 gpsLng = gpsLng,
                 gpsAddress = gpsAddress,
-                catatan = catatan
+                catatan = catatan,
+                tarikLayakPcs = tarikLayakPcs,
+                tarikBsPcs = tarikBsPcs
             )
-            _feedbackSnackbar.value = "Transaksi Outlet Selesai: Laku ${sisaTitipanLalu - sisaFisik} Pcs, Retur ${sisaFisik} Pcs, Bayar ${formatRupiah(uangDiterima)}"
+            _feedbackSnackbar.value = "Transaksi Toko Selesai: Laku ${sisaTitipanLalu - sisaFisik} Pcs, Tarik $sisaFisik Pcs (Layak: $tarikLayakPcs, BS: $tarikBsPcs), Bayar ${formatRupiah(uangDiterima)}"
             closeTransactionDialog()
         }
     }

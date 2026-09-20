@@ -437,8 +437,25 @@ fun MapsScreen(
         // --- 1. FULL INTERACTIVE MAP CANVAS (ONLINE & OFFLINE TILE RENDERING) ---
         val textMeasurer = rememberTextMeasurer()
 
-        // Cache of loaded ImageBitmaps for current viewport
+        // Cache of loaded ImageBitmaps for current viewport & in-flight tracking
         val tileMapState = remember { mutableStateMapOf<String, ImageBitmap?>() }
+        val inFlightTileRequests = remember { mutableSetOf<String>() }
+        var flingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+        var lastPanVelocity by remember { mutableStateOf(Offset.Zero) }
+        var lastPanTimestamp by remember { mutableLongStateOf(0L) }
+
+        // State snapshots for pointer gesture callbacks to avoid resetting gesture detectors
+        val currentFilteredWarungs by rememberUpdatedState(filteredWarungs)
+        val currentCenterLat by rememberUpdatedState(mapCenterLat)
+        val currentCenterLng by rememberUpdatedState(mapCenterLng)
+        val currentZoom by rememberUpdatedState(zoomLevel)
+        val currentBearing by rememberUpdatedState(mapBearingDeg)
+        val currentCrosshair by rememberUpdatedState(isCrosshairMode)
+
+        LaunchedEffect(currentMapStyle) {
+            tileMapState.clear()
+            inFlightTileRequests.clear()
+        }
 
         Canvas(
             modifier = Modifier
@@ -450,46 +467,127 @@ fun MapsScreen(
                     rotationZ = -mapBearingDeg
                     cameraDistance = 12f * density
                 }
-                .pointerInput(mapCenterLat, mapCenterLng, zoomLevel, mapBearingDeg) {
-                    detectTransformGestures { _, pan, zoom, rotation ->
-                        // Standard Logarithmic Pinch-to-Zoom (smooth & natural, no hyper-sensitive jumps)
-                        if (zoom != 1.0f) {
-                            val logZoomDelta = (kotlin.math.ln(zoom.toDouble().coerceAtLeast(0.001)) / kotlin.math.ln(2.0)).toFloat()
-                            zoomLevel = (zoomLevel + logZoomDelta * 0.95f).coerceIn(3.0f, 21.0f)
+                .pointerInput(Unit) {
+                    while (true) {
+                        lastPanVelocity = Offset.Zero
+                        lastPanTimestamp = 0L
+
+                        detectTransformGestures(panZoomLock = false) { centroid, pan, zoom, rotation ->
+                            flingJob?.cancel()
+
+                            // 1. Calculate responsive zoom change with high sensitivity (1.35x)
+                            var effectiveZoom = zoomLevel
+                            if (zoom != 1.0f) {
+                                val logDelta = (kotlin.math.ln(zoom.toDouble().coerceAtLeast(0.0001)) / kotlin.math.ln(2.0)).toFloat()
+                                effectiveZoom = (zoomLevel + logDelta * 1.35f).coerceIn(3.0f, 21.0f)
+                            }
+
+                            // 2. Rotate with deadzone to prevent accidental twist during pinch
+                            if (abs(rotation) > 2.2f) {
+                                mapBearingDeg = ((mapBearingDeg + rotation * 0.9f) % 360f + 360f) % 360f
+                            }
+
+                            if (pan.getDistanceSquared() > 2f) {
+                                isFollowingUserGps = false
+                            }
+
+                            // 3. Track instantaneous pan velocity for momentum glide / fling
+                            val now = System.currentTimeMillis()
+                            if (lastPanTimestamp > 0L) {
+                                val dt = (now - lastPanTimestamp).coerceIn(8L, 100L)
+                                val instantVx = (pan.x / dt) * 1000f
+                                val instantVy = (pan.y / dt) * 1000f
+                                lastPanVelocity = Offset(
+                                    lastPanVelocity.x * 0.35f + instantVx * 0.65f,
+                                    lastPanVelocity.y * 0.35f + instantVy * 0.65f
+                                )
+                            }
+                            lastPanTimestamp = now
+
+                            // 4. Centroid-Aware Coordinate Transformation (Zooms seamlessly around pinch focal point)
+                            val canvasW = size.width.toFloat()
+                            val canvasH = size.height.toFloat()
+                            val cx = canvasW / 2f
+                            val cy = canvasH / 2f
+
+                            val radBearing = Math.toRadians(mapBearingDeg.toDouble())
+                            val cosB = cos(radBearing)
+                            val sinB = sin(radBearing)
+
+                            // Rotate pan offset into world coordinates
+                            val rotPanX = pan.x * cosB - pan.y * sinB
+                            val rotPanY = pan.x * sinB + pan.y * cosB
+
+                            // Current and new world pixel scale (256 * 2^zoom)
+                            val wCur = 256.0 * 2.0.pow(zoomLevel.toDouble())
+                            val wNew = 256.0 * 2.0.pow(effectiveZoom.toDouble())
+
+                            // Current normalized center in Web Mercator [0..1]
+                            val curNormX = (mapCenterLng + 180.0) / 360.0
+                            val radLat = Math.toRadians(mapCenterLat.coerceIn(-85.0511, 85.0511))
+                            val curNormY = (1.0 - asinh(tan(radLat)) / Math.PI) / 2.0
+
+                            // Pinch centroid vector from screen center rotated into world coordinate space
+                            val pinchDx = (centroid.x - cx).toDouble()
+                            val pinchDy = (centroid.y - cy).toDouble()
+                            val rotPinchDx = pinchDx * cosB - pinchDy * sinB
+                            val rotPinchDy = pinchDx * sinB + pinchDy * cosB
+
+                            // Exact projection formula: Point under user's fingers remains 100% stationary
+                            val nextNormX = curNormX + rotPinchDx * (1.0 / wCur - 1.0 / wNew) - (rotPanX / wNew)
+                            val nextNormY = curNormY + rotPinchDy * (1.0 / wCur - 1.0 / wNew) - (rotPanY / wNew)
+
+                            val newLng = nextNormX * 360.0 - 180.0
+                            val sinhVal = sinh(Math.PI * (1.0 - 2.0 * nextNormY))
+                            val newLat = Math.toDegrees(atan(sinhVal))
+
+                            mapCenterLat = newLat.coerceIn(-85.0511, 85.0511)
+                            mapCenterLng = ((newLng + 180.0) % 360.0 + 360.0) % 360.0 - 180.0
+                            zoomLevel = effectiveZoom
                         }
-                        
-                        // Compass Rotation with intentional deadzone to avoid accidental spinning during pinch/pan
-                        if (abs(rotation) > 1.8f) {
-                            mapBearingDeg = ((mapBearingDeg + rotation * 0.85f) % 360f + 360f) % 360f
+
+                        // When gesture ends (fingers lifted), if speed is high enough, launch smooth inertial glide!
+                        val speed = lastPanVelocity.getDistance()
+                        if (speed > 300f) {
+                            flingJob = coroutineScope.launch {
+                                var curVx = lastPanVelocity.x.coerceIn(-5000f, 5000f)
+                                var curVy = lastPanVelocity.y.coerceIn(-5000f, 5000f)
+                                val friction = 0.93f
+                                val frameDt = 0.016
+
+                                while (hypot(curVx, curVy) > 50f) {
+                                    val pX = (curVx * frameDt).toFloat()
+                                    val pY = (curVy * frameDt).toFloat()
+
+                                    val radB = Math.toRadians(mapBearingDeg.toDouble())
+                                    val rX = pX * cos(radB) - pY * sin(radB)
+                                    val rY = pX * sin(radB) + pY * cos(radB)
+
+                                    val (cTileX, cTileY) = OsmTileEngine.latLngToTileCoordinates(mapCenterLat, mapCenterLng, zoomLevel)
+                                    val nTileX = cTileX - (rX / 256.0)
+                                    val nTileY = cTileY - (rY / 256.0)
+                                    val (fLat, fLng) = OsmTileEngine.tileCoordinatesToLatLng(nTileX, nTileY, zoomLevel)
+
+                                    mapCenterLat = fLat.coerceIn(-85.0511, 85.0511)
+                                    mapCenterLng = ((fLng + 180.0) % 360.0 + 360.0) % 360.0 - 180.0
+
+                                    curVx *= friction
+                                    curVy *= friction
+                                    delay(16)
+                                }
+                            }
                         }
-
-                        if (pan.getDistanceSquared() > 4f) {
-                            isFollowingUserGps = false
-                        }
-
-                        val (curTileX, curTileY) = OsmTileEngine.latLngToTileCoordinates(mapCenterLat, mapCenterLng, zoomLevel)
-                        val radBearing = Math.toRadians(mapBearingDeg.toDouble())
-                        
-                        // Rotate pan offset according to map camera bearing
-                        val rotPanX = pan.x * cos(radBearing) - pan.y * sin(radBearing)
-                        val rotPanY = pan.x * sin(radBearing) + pan.y * cos(radBearing)
-
-                        val newTileX = curTileX - (rotPanX / 256.0)
-                        val newTileY = curTileY - (rotPanY / 256.0)
-                        val (newLat, newLng) = OsmTileEngine.tileCoordinatesToLatLng(newTileX, newTileY, zoomLevel)
-
-                        mapCenterLat = newLat.coerceIn(-85.0511, 85.0511)
-                        mapCenterLng = ((newLng + 180.0) % 360.0 + 360.0) % 360.0 - 180.0
                     }
                 }
-                .pointerInput(filteredWarungs, mapCenterLat, mapCenterLng, zoomLevel, mapBearingDeg, isCrosshairMode) {
+                .pointerInput(Unit) {
                     detectTapGestures(
                         onTap = { tapOffset ->
+                            flingJob?.cancel()
                             val canvasWidth = size.width.toFloat()
                             val canvasHeight = size.height.toFloat()
-                            val (centerTileX, centerTileY) = OsmTileEngine.latLngToTileCoordinates(mapCenterLat, mapCenterLng, zoomLevel)
+                            val (centerTileX, centerTileY) = OsmTileEngine.latLngToTileCoordinates(currentCenterLat, currentCenterLng, currentZoom)
 
-                            val rad = Math.toRadians(mapBearingDeg.toDouble())
+                            val rad = Math.toRadians(currentBearing.toDouble())
                             val cosB = cos(rad).toFloat()
                             val sinB = sin(rad).toFloat()
                             val cx = canvasWidth / 2f
@@ -499,14 +597,13 @@ fun MapsScreen(
                             val unrotY = cy + (tapOffset.x - cx) * sinB + (tapOffset.y - cy) * cosB
 
                             var closest: WarungEntity? = null
-                            var minDistancePx = 44.dp.toPx() // Tap target tolerance
+                            var minDistancePx = 48.dp.toPx() // Accessible touch target tolerance
 
-                            filteredWarungs.forEach { w ->
-                                val (wx, wy) = OsmTileEngine.latLngToTileCoordinates(w.latitude, w.longitude, zoomLevel)
+                            currentFilteredWarungs.forEach { w ->
+                                val (wx, wy) = OsmTileEngine.latLngToTileCoordinates(w.latitude, w.longitude, currentZoom)
                                 val px = cx + ((wx - centerTileX) * 256.0).toFloat()
                                 val py = cy + ((wy - centerTileY) * 256.0).toFloat()
 
-                                // Check distance both to pin tip and pin head
                                 val distTip = hypot(unrotX - px, unrotY - py)
                                 val distHead = hypot(unrotX - px, unrotY - (py - 22.dp.toPx()))
                                 val dist = minOf(distTip, distHead)
@@ -528,12 +625,13 @@ fun MapsScreen(
                             }
                         },
                         onLongPress = { tapOffset ->
-                            if (!isCrosshairMode) {
+                            flingJob?.cancel()
+                            if (!currentCrosshair) {
                                 val canvasWidth = size.width.toFloat()
                                 val canvasHeight = size.height.toFloat()
-                                val (centerTileX, centerTileY) = OsmTileEngine.latLngToTileCoordinates(mapCenterLat, mapCenterLng, zoomLevel)
+                                val (centerTileX, centerTileY) = OsmTileEngine.latLngToTileCoordinates(currentCenterLat, currentCenterLng, currentZoom)
 
-                                val rad = Math.toRadians(mapBearingDeg.toDouble())
+                                val rad = Math.toRadians(currentBearing.toDouble())
                                 val cosB = cos(rad).toFloat()
                                 val sinB = sin(rad).toFloat()
                                 val cx = canvasWidth / 2f
@@ -544,7 +642,7 @@ fun MapsScreen(
 
                                 val tappedTileX = centerTileX + (unrotX - cx) / 256.0
                                 val tappedTileY = centerTileY + (unrotY - cy) / 256.0
-                                val (tappedLat, tappedLng) = OsmTileEngine.tileCoordinatesToLatLng(tappedTileX, tappedTileY, zoomLevel)
+                                val (tappedLat, tappedLng) = OsmTileEngine.tileCoordinatesToLatLng(tappedTileX, tappedTileY, currentZoom)
 
                                 droppedPinLocation = Pair(tappedLat, tappedLng)
                                 selectedWarung = null
@@ -552,12 +650,13 @@ fun MapsScreen(
                             }
                         },
                         onDoubleTap = { tapOffset ->
-                            if (!isCrosshairMode) {
+                            flingJob?.cancel()
+                            if (!currentCrosshair) {
                                 val canvasWidth = size.width.toFloat()
                                 val canvasHeight = size.height.toFloat()
-                                val (centerTileX, centerTileY) = OsmTileEngine.latLngToTileCoordinates(mapCenterLat, mapCenterLng, zoomLevel)
+                                val (centerTileX, centerTileY) = OsmTileEngine.latLngToTileCoordinates(currentCenterLat, currentCenterLng, currentZoom)
 
-                                val rad = Math.toRadians(mapBearingDeg.toDouble())
+                                val rad = Math.toRadians(currentBearing.toDouble())
                                 val cosB = cos(rad).toFloat()
                                 val sinB = sin(rad).toFloat()
                                 val cx = canvasWidth / 2f
@@ -568,10 +667,23 @@ fun MapsScreen(
 
                                 val tappedTileX = centerTileX + (unrotX - cx) / 256.0
                                 val tappedTileY = centerTileY + (unrotY - cy) / 256.0
-                                val (tappedLat, tappedLng) = OsmTileEngine.tileCoordinatesToLatLng(tappedTileX, tappedTileY, zoomLevel)
+                                val (tappedLat, tappedLng) = OsmTileEngine.tileCoordinatesToLatLng(tappedTileX, tappedTileY, currentZoom)
 
-                                droppedPinLocation = Pair(tappedLat, tappedLng)
-                                selectedWarung = null
+                                coroutineScope.launch {
+                                    val startLat = mapCenterLat
+                                    val startLng = mapCenterLng
+                                    val startZoom = zoomLevel
+                                    val targetZoom = (startZoom + 1.25f).coerceAtMost(20.0f)
+                                    androidx.compose.animation.core.animate(
+                                        initialValue = 0f,
+                                        targetValue = 1f,
+                                        animationSpec = androidx.compose.animation.core.tween(260, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                    ) { progress, _ ->
+                                        mapCenterLat = startLat + (tappedLat - startLat) * progress * 0.65
+                                        mapCenterLng = startLng + (tappedLng - startLng) * progress * 0.65
+                                        zoomLevel = startZoom + (targetZoom - startZoom) * progress
+                                    }
+                                }
                             }
                         }
                     )
@@ -606,29 +718,47 @@ fun MapsScreen(
             val minY = (centerTileY.toInt() - halfTilesY).coerceAtLeast(0)
             val maxY = (centerTileY.toInt() + halfTilesY).coerceAtMost(n.toInt() - 1)
 
-            // Draw Real Map Tiles
+            // Draw Real Map Tiles with zero-delay memory cache & parent-tile fallback
             for (tx in minX..maxX) {
                 for (ty in minY..maxY) {
                     val tilePixelX = (canvasWidth / 2f) + ((tx - centerTileX).toFloat() * scaledTilePx)
                     val tilePixelY = (canvasHeight / 2f) + ((ty - centerTileY).toFloat() * scaledTilePx)
 
                     val key = "${currentMapStyle.name}_${currentIntZoom}_${tx}_$ty"
-                    val cachedTile = tileMapState[key]
+                    val cachedTile = tileMapState[key] ?: OsmTileEngine.getMemoryCachedTile(currentMapStyle, currentIntZoom, tx, ty)
 
                     if (cachedTile != null) {
+                        tileMapState[key] = cachedTile
                         drawImage(
                             image = cachedTile,
                             dstOffset = IntOffset(tilePixelX.roundToInt(), tilePixelY.roundToInt()),
                             dstSize = IntSize(ceil(scaledTilePx).toInt() + 1, ceil(scaledTilePx).toInt() + 1)
                         )
                     } else {
-                        // Tile not yet in local memory map -> Request via coroutine
-                        coroutineScope.launch {
-                            val loaded = OsmTileEngine.getTile(context, currentMapStyle, currentIntZoom, tx, ty) {
-                                tileRefreshKey++
-                            }
-                            if (loaded != null) {
-                                tileMapState[key] = loaded
+                        // Check if parent tile (zoom-1) exists in memory for seamless placeholder
+                        val parentInfo = OsmTileEngine.getParentMemoryCachedTile(currentMapStyle, currentIntZoom, tx, ty)
+                        if (parentInfo != null) {
+                            val (parentTile, qx, qy) = parentInfo
+                            val subX = qx * 128
+                            val subY = qy * 128
+                            drawImage(
+                                image = parentTile,
+                                srcOffset = IntOffset(subX, subY),
+                                srcSize = IntSize(128, 128),
+                                dstOffset = IntOffset(tilePixelX.roundToInt(), tilePixelY.roundToInt()),
+                                dstSize = IntSize(ceil(scaledTilePx).toInt() + 1, ceil(scaledTilePx).toInt() + 1)
+                            )
+                        }
+
+                        // Tile not yet in local memory -> Request background fetch once without duplicating
+                        if (key !in inFlightTileRequests) {
+                            inFlightTileRequests.add(key)
+                            coroutineScope.launch {
+                                val loaded = OsmTileEngine.getTile(context, currentMapStyle, currentIntZoom, tx, ty)
+                                if (loaded != null) {
+                                    tileMapState[key] = loaded
+                                }
+                                inFlightTileRequests.remove(key)
                             }
                         }
                     }
@@ -1302,9 +1432,23 @@ fun MapsScreen(
                 IconButton(onClick = {
                     isFollowingUserGps = true
                     if (effectiveGps.isAvailable && effectiveGps.latitude != 0.0) {
-                        mapCenterLat = effectiveGps.latitude
-                        mapCenterLng = effectiveGps.longitude
-                        zoomLevel = 16.5f
+                        coroutineScope.launch {
+                            val startLat = mapCenterLat
+                            val startLng = mapCenterLng
+                            val startZoom = zoomLevel
+                            val targetLat = effectiveGps.latitude
+                            val targetLng = effectiveGps.longitude
+                            val targetZoom = 16.5f
+                            androidx.compose.animation.core.animate(
+                                initialValue = 0f,
+                                targetValue = 1f,
+                                animationSpec = androidx.compose.animation.core.tween(350, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                            ) { p, _ ->
+                                mapCenterLat = startLat + (targetLat - startLat) * p
+                                mapCenterLng = startLng + (targetLng - startLng) * p
+                                zoomLevel = startZoom + (targetZoom - startZoom) * p
+                            }
+                        }
                     }
 
                     if (!LocationHelper.isLocationServiceEnabled(context)) {
@@ -1456,7 +1600,16 @@ fun MapsScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     IconButton(
-                        onClick = { zoomLevel = (zoomLevel + 1.0f).coerceAtMost(21.0f) },
+                        onClick = {
+                            coroutineScope.launch {
+                                val target = (zoomLevel + 1.0f).coerceAtMost(21.0f)
+                                androidx.compose.animation.core.animate(
+                                    initialValue = zoomLevel,
+                                    targetValue = target,
+                                    animationSpec = androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                ) { v, _ -> zoomLevel = v }
+                            }
+                        },
                         modifier = Modifier.size(46.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Zoom In", tint = Slate800)
@@ -1467,7 +1620,16 @@ fun MapsScreen(
                         modifier = Modifier.width(30.dp)
                     )
                     IconButton(
-                        onClick = { zoomLevel = (zoomLevel - 1.0f).coerceAtLeast(3.0f) },
+                        onClick = {
+                            coroutineScope.launch {
+                                val target = (zoomLevel - 1.0f).coerceAtLeast(3.0f)
+                                androidx.compose.animation.core.animate(
+                                    initialValue = zoomLevel,
+                                    targetValue = target,
+                                    animationSpec = androidx.compose.animation.core.tween(240, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                                ) { v, _ -> zoomLevel = v }
+                            }
+                        },
                         modifier = Modifier.size(46.dp)
                     ) {
                         Icon(Icons.Default.Remove, contentDescription = "Zoom Out", tint = Slate800)
