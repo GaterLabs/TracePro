@@ -18,6 +18,16 @@ data class LoadingItemInput(
     val catatanMuat: String = ""
 )
 
+data class WeeklyShipmentInput(
+    val productId: String,
+    val jumlahPack: Int,
+    val rasioKonversi: Int = 10,
+    val hargaBeliPerPack: Double = 0.0,
+    val nomorDoAtauNota: String = "",
+    val namaSupplier: String = "",
+    val catatan: String = ""
+)
+
 data class ProductClosingInput(
     val productId: String,
     val sisaDusSore: Int,
@@ -35,6 +45,7 @@ class SfaRepository(private val dao: SfaDao) {
     val allBsSortirs: Flow<List<BsSortirEntity>> = dao.getAllBsSortirs()
     val allPabriks: Flow<List<PabrikEntity>> = dao.getAllPabriks()
     val allWriteOffs: Flow<List<WriteOffEntity>> = dao.getAllWriteOffs()
+    val allWeeklyShipments: Flow<List<WeeklyShipmentEntity>> = dao.getAllWeeklyShipments()
     val userProfile: Flow<UserProfileEntity?> = dao.getUserProfile()
     val allCustomPrices: Flow<List<WarungCustomPriceEntity>> = dao.getAllCustomPrices()
 
@@ -192,10 +203,46 @@ class SfaRepository(private val dao: SfaDao) {
             )
             dao.insertDailyLoading(loading)
 
-            // Update Drawer stok_fresh_pabrik
+            // Update Drawer stok_fresh_pabrik dan kurangi pool gudang rumah jika ada stok di pool
+            val currentDrawer = dao.getDrawerByProductId(item.productId) ?: InventoryDrawerEntity(productId = item.productId)
+            val updatedPool = (currentDrawer.stokPoolGudangPcs - totalPcs).coerceAtLeast(0)
+            val updatedDrawer = currentDrawer.copy(
+                stokPoolGudangPcs = updatedPool,
+                stokFreshPabrikPcs = currentDrawer.stokFreshPabrikPcs + totalPcs,
+                lastUpdated = System.currentTimeMillis()
+            )
+            dao.insertDrawer(updatedDrawer)
+        }
+    }
+
+    /**
+     * Penerimaan Kiriman Mingguan dari Pabrik / Bos ke Pool Gudang Rumah:
+     * Menyimpan batch pengiriman dan mengakumulasikan stok fisik ke stokPoolGudangPcs (Carry-over sisa lama + baru).
+     */
+    suspend fun processWeeklyShipment(
+        items: List<WeeklyShipmentInput>
+    ) {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        items.filter { it.jumlahPack > 0 }.forEach { item ->
+            val totalPcs = item.jumlahPack * item.rasioKonversi
+            val shipment = WeeklyShipmentEntity(
+                tanggal = today,
+                productId = item.productId,
+                jumlahPack = item.jumlahPack,
+                rasioKonversi = item.rasioKonversi,
+                totalPcs = totalPcs,
+                hargaBeliPerPack = item.hargaBeliPerPack,
+                totalNilaiBeli = item.jumlahPack * item.hargaBeliPerPack,
+                nomorDoAtauNota = item.nomorDoAtauNota,
+                namaSupplier = item.namaSupplier,
+                catatan = item.catatan
+            )
+            dao.insertWeeklyShipment(shipment)
+
+            // Akumulasi langsung ke Pool Gudang Rumah (Carry-Over jatah mingguan)
             val currentDrawer = dao.getDrawerByProductId(item.productId) ?: InventoryDrawerEntity(productId = item.productId)
             val updatedDrawer = currentDrawer.copy(
-                stokFreshPabrikPcs = currentDrawer.stokFreshPabrikPcs + totalPcs,
+                stokPoolGudangPcs = currentDrawer.stokPoolGudangPcs + totalPcs,
                 lastUpdated = System.currentTimeMillis()
             )
             dao.insertDrawer(updatedDrawer)

@@ -111,11 +111,13 @@ fun MinimalStatCard(
 
 @Composable
 fun DrawerInventorySummary(
+    stokPoolGudang: Int = 0,
     stokFresh: Int,
     stokBsBelumSortir: Int,
     stokPribadiLayak: Int,
     stokPribadiRusak: Int,
     onSortirClick: () -> Unit,
+    onTerimaKirimanClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     lang: String = "ID"
 ) {
@@ -133,7 +135,7 @@ fun DrawerInventorySummary(
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Header
             Row(
@@ -161,14 +163,14 @@ fun DrawerInventorySummary(
                     }
                     Column {
                         Text(
-                            text = com.example.util.AppStrings.tr("4 LACI VIRTUAL INVENTORY", "4 VIRTUAL INVENTORY DRAWERS", lang),
+                            text = com.example.util.AppStrings.tr("INVENTORY BERJENJANG (POOL & MOTOR)", "HIERARCHICAL INVENTORY (POOL & VEHICLE)", lang),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = Slate500,
                             letterSpacing = 0.6.sp
                         )
                         Text(
-                            text = com.example.util.AppStrings.tr("Pemisahan Hak Aset & Fisik Dus/Pcs", "Asset Rights Separation & Boxes/Units", lang),
+                            text = com.example.util.AppStrings.tr("Gudang Mingguan + Tas Motor Keliling", "Weekly Pool + Daily Vehicle Stock", lang),
                             style = MaterialTheme.typography.bodySmall,
                             color = Slate600,
                             fontSize = 11.sp
@@ -176,30 +178,98 @@ fun DrawerInventorySummary(
                     }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Slate100,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Slate200),
-                    modifier = Modifier.clickable { onSortirClick() }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Autorenew,
-                            contentDescription = null,
-                            tint = Slate700,
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Text(
-                            text = com.example.util.AppStrings.tr("Sortir Retur", "Return Sorting", lang),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Slate800,
-                            fontWeight = FontWeight.Bold
-                        )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (onTerimaKirimanClick != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Slate900,
+                            modifier = Modifier.clickable { onTerimaKirimanClick() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AddBusiness,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = "+ Terima Jatah",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Slate100,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Slate200),
+                        modifier = Modifier.clickable { onSortirClick() }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Autorenew,
+                                contentDescription = null,
+                                tint = Slate700,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = com.example.util.AppStrings.tr("Sortir", "Sort", lang),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Slate800,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // High Priority Banner: Gudang Pool Rumah (Jatah Mingguan Bos)
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Slate900,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(
+                            modifier = Modifier.size(8.dp).clip(CircleShape).background(AmberWarning)
+                        )
+                        Column {
+                            Text(
+                                text = "POOL RUMAH / JATAH MINGGUAN",
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "Akumulasi kiriman bos (Siap dimuat)",
+                                color = Slate300,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                    Text(
+                        text = "$stokPoolGudang Pcs",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
                 }
             }
 
@@ -208,10 +278,10 @@ fun DrawerInventorySummary(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Laci 1: Fresh Pabrik
+                // Laci 1: Tas Motor (Fresh Harian)
                 DrawerItem(
-                    label = com.example.util.AppStrings.tr("Fresh Pabrik", "Fresh Factory", lang),
-                    owner = com.example.util.AppStrings.tr("Milik Pabrik", "Supplier Asset", lang),
+                    label = com.example.util.AppStrings.tr("Tas Motor (Fresh)", "Vehicle Stock", lang),
+                    owner = com.example.util.AppStrings.tr("Muat Harian Siap Edar", "Daily Vehicle Load", lang),
                     count = "$stokFresh Pcs",
                     dotColor = EmeraldSuccess,
                     modifier = Modifier.weight(1f)
@@ -219,7 +289,7 @@ fun DrawerInventorySummary(
 
                 // Laci 2: Retur Tarikan (Belum Sortir)
                 DrawerItem(
-                    label = com.example.util.AppStrings.tr("Retur Tarikan", "Unsorted Returns", lang),
+                    label = com.example.util.AppStrings.tr("Retur Tarikan (BS)", "Unsorted Returns", lang),
                     owner = com.example.util.AppStrings.tr("Perlu Dipilah", "Needs Sorting", lang),
                     count = "$stokBsBelumSortir Pcs",
                     dotColor = AmberWarning,
@@ -233,8 +303,8 @@ fun DrawerInventorySummary(
             ) {
                 // Laci 3: Modal Pribadi Layak Jual
                 DrawerItem(
-                    label = com.example.util.AppStrings.tr("Aset Pribadi (Repack)", "Personal (Repack)", lang),
-                    owner = com.example.util.AppStrings.tr("100% Hak Sales", "100% Sales Margin", lang),
+                    label = com.example.util.AppStrings.tr("Rolling / Siap Putar", "Personal (Rolling)", lang),
+                    owner = com.example.util.AppStrings.tr("Tarikan Renyah / Repack", "100% Sales Margin", lang),
                     count = "$stokPribadiLayak Pcs",
                     dotColor = IndigoAsset,
                     modifier = Modifier.weight(1f)
@@ -242,7 +312,7 @@ fun DrawerInventorySummary(
 
                 // Laci 4: Pribadi Rusak / Write-off
                 DrawerItem(
-                    label = com.example.util.AppStrings.tr("Rusak / Afkir (Dibuang)", "Damaged / Waste (Scrapped)", lang),
+                    label = com.example.util.AppStrings.tr("Rusak / Afkir (Tengik)", "Damaged / Waste", lang),
                     owner = com.example.util.AppStrings.tr("Kerugian Pribadi", "Personal Loss", lang),
                     count = "$stokPribadiRusak Pcs",
                     dotColor = RoseDanger,

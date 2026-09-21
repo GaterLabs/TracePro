@@ -268,4 +268,17 @@ interface SfaDao {
 
     @Query("SELECT * FROM warung_custom_prices")
     suspend fun getAllCustomPricesDirect(): List<WarungCustomPriceEntity>
+
+    // --- WEEKLY SHIPMENTS (JATAH MINGGUAN / POOL RUMAH) ---
+    @Query("SELECT * FROM weekly_shipments ORDER BY createdAt DESC")
+    fun getAllWeeklyShipments(): Flow<List<WeeklyShipmentEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWeeklyShipment(shipment: WeeklyShipmentEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertWeeklyShipments(shipments: List<WeeklyShipmentEntity>)
+
+    @Query("SELECT * FROM weekly_shipments")
+    suspend fun getAllWeeklyShipmentsDirect(): List<WeeklyShipmentEntity>
 }

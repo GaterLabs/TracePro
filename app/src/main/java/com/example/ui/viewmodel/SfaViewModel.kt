@@ -163,6 +163,9 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
     val customPrices: StateFlow<List<WarungCustomPriceEntity>> = repository.allCustomPrices
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val weeklyShipments: StateFlow<List<WeeklyShipmentEntity>> = repository.allWeeklyShipments
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     // Location & GPS Tracking (100% Offline Compatible)
     private val _currentGpsLocation = MutableStateFlow(
         com.example.util.LocationHelper.getInstantLocation(application)
@@ -311,6 +314,21 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
             val hasDebt = validItems.any { it.opsiBayarMuat == "HUTANG" }
             val noteStatus = if (hasCash) " (Bayar Cash Langsung)" else if (hasDebt) " (Dicatat Hutang/Tempo)" else " (Konsinyasi Closing)"
             _feedbackSnackbar.value = "Berhasil muat ${validItems.size} produk (Total $totalPack Pack / $totalPcs Pcs)$noteStatus ke Stok Fresh Mobil!"
+            closeTransactionDialog()
+        }
+    }
+
+    fun executeBatchWeeklyShipment(items: List<com.example.data.repository.WeeklyShipmentInput>) {
+        viewModelScope.launch {
+            val validItems = items.filter { it.jumlahPack > 0 }
+            if (validItems.isEmpty()) {
+                _feedbackSnackbar.value = "Tidak ada kiriman mingguan yang diinput (Kuantiti 0)."
+                return@launch
+            }
+            repository.processWeeklyShipment(validItems)
+            val totalPack = validItems.sumOf { it.jumlahPack }
+            val totalPcs = validItems.sumOf { it.jumlahPack * it.rasioKonversi }
+            _feedbackSnackbar.value = "✅ Kiriman masuk: $totalPack Pack ($totalPcs Pcs) berhasil diakumulasikan ke Pool Gudang Rumah!"
             closeTransactionDialog()
         }
     }
@@ -1070,4 +1088,6 @@ sealed class TransactionDialogState {
     object AiConfigSettings : TransactionDialogState()
     data class AiOutletRecommendation(val warung: WarungEntity) : TransactionDialogState()
     data class BayarHutangSupplier(val loading: DailyLoadingEntity) : TransactionDialogState()
+    object TerimaKirimanMingguan : TransactionDialogState()
+    object RekapMingguanBos : TransactionDialogState()
 }

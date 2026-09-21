@@ -21,9 +21,10 @@ import java.util.UUID
 data class InventoryDrawerEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val productId: String,
-    val stokFreshPabrikPcs: Int = 0,
+    val stokPoolGudangPcs: Int = 0, // Kantung Jatah Mingguan / Pool Rumah (Aset Bos/Pabrik yang disimpan di rumah)
+    val stokFreshPabrikPcs: Int = 0, // Tas Motor / Kendaraan Harian (Muat Harian Siap Edar)
     val stokBsBelumSortirPcs: Int = 0,
-    val stokPribadiLayakJualPcs: Int = 0,
+    val stokPribadiLayakJualPcs: Int = 0, // Hasil Tarik Warung Masih Renyah / Siap Rolling
     val stokPribadiRusakPcs: Int = 0,
     val lastUpdated: Long = System.currentTimeMillis()
 )

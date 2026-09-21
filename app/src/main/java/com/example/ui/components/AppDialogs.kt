@@ -350,6 +350,19 @@ val activeDialog by viewModel.activeTransactionDialog.collectAsState()
                 }
             )
         }
+        is TransactionDialogState.TerimaKirimanMingguan -> {
+            TerimaKirimanMingguanDialog(
+                products = products,
+                drawers = drawers,
+                onDismiss = { viewModel.closeTransactionDialog() },
+                onSubmitBatch = { items ->
+                    viewModel.executeBatchWeeklyShipment(items)
+                }
+            )
+        }
+        is TransactionDialogState.RekapMingguanBos -> {
+            viewModel.closeTransactionDialog()
+        }
         is TransactionDialogState.EditConfig -> {
             viewModel.closeTransactionDialog()
         }
@@ -837,21 +850,37 @@ val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).forma
                                     }
 
                                     // Stok info
-                                    Column(horizontalAlignment = Alignment.End) {
+                                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        val poolPcs = drawer?.stokPoolGudangPcs ?: 0
+                                        val poolPack = poolPcs / rasio.coerceAtLeast(1)
+                                        if (poolPcs > 0) {
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = AmberWarning.copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    "Pool Rumah: $poolPack $satuanBesarLabel ($poolPcs ${product.satuanKecil})",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Slate800,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
                                         Surface(
                                             shape = RoundedCornerShape(6.dp),
                                             color = EmeraldSurface
                                         ) {
                                             Text(
-                                                "Fresh: ${drawer?.stokFreshPabrikPcs ?: 0} ${product.satuanKecil}",
+                                                "Tas Motor: ${drawer?.stokFreshPabrikPcs ?: 0} ${product.satuanKecil}",
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = EmeraldText,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
                                         if (todayLoaded > 0) {
-                                            Text(tr("Dimuat tgl ini: $todayLoaded $satuanBesarLabel", "Loaded on this date: $todayLoaded $satuanBesarLabel", lang), fontSize = 9.sp, color = Slate500)
+                                            Text(tr("Dimuat hari ini: $todayLoaded $satuanBesarLabel", "Loaded today: $todayLoaded $satuanBesarLabel", lang), fontSize = 9.sp, color = Slate500)
                                         }
                                     }
                                 }
@@ -1081,6 +1110,515 @@ val today = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).forma
                 }
             }
         }
+        }
+    }
+}
+
+// 1.0 DIALOG TERIMA KIRIMAN MINGGUAN DARI BOS / PABRIK (AKUMULASI KE POOL GUDANG RUMAH)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TerimaKirimanMingguanDialog(
+    products: List<ProductEntity>,
+    drawers: List<InventoryDrawerEntity> = emptyList(),
+    onDismiss: () -> Unit,
+    onSubmitBatch: (List<com.example.data.repository.WeeklyShipmentInput>) -> Unit
+) {
+    val lang = LocalAppLanguage.current
+    var quantities by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    var nomorSuratJalan by remember { mutableStateOf("") }
+    var catatan by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+
+    val categories = remember(products) {
+        products.map { it.kategori }.filter { it.isNotBlank() }.distinct()
+    }
+
+    val filteredProducts = remember(products, searchQuery, selectedCategory) {
+        products.filter { prod ->
+            val matchSearch = searchQuery.isBlank() ||
+                prod.nama.contains(searchQuery, ignoreCase = true) ||
+                prod.kategori.contains(searchQuery, ignoreCase = true)
+            val matchCat = selectedCategory == null || prod.kategori == selectedCategory
+            matchSearch && matchCat
+        }
+    }
+
+    val totalPack = remember(quantities) {
+        quantities.values.sumOf { it.toIntOrNull() ?: 0 }
+    }
+
+    val totalEstimasiNilai = remember(quantities, products) {
+        quantities.entries.sumOf { (productId, qtyStr) ->
+            val qty = qtyStr.toIntOrNull() ?: 0
+            val prod = products.find { it.id == productId }
+            if (prod != null) qty * prod.hargaBeliPabrik else 0.0
+        }
+    }
+
+    val totalPcsAll = remember(quantities, products) {
+        quantities.entries.sumOf { (productId, qtyStr) ->
+            val qty = qtyStr.toIntOrNull() ?: 0
+            val prod = products.find { it.id == productId }
+            if (prod != null) qty * prod.rasioKonversi else 0
+        }
+    }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White,
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.92f)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Header Dialog
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Slate900),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Inventory2,
+                                contentDescription = null,
+                                tint = AmberWarning,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "Terima Kiriman Mingguan (Bos)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Slate900
+                            )
+                            Text(
+                                text = "Akumulasi Jatah Baru ke Pool Gudang Rumah",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate500,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Tutup", tint = Slate500)
+                    }
+                }
+
+                HorizontalDivider(color = Slate200)
+
+                // Surat Jalan & Catatan Pengiriman
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = nomorSuratJalan,
+                        onValueChange = { nomorSuratJalan = it },
+                        label = { Text("No. Surat Jalan / DO (Opsional)", fontSize = 11.sp) },
+                        placeholder = { Text("Contoh: SJ-2026/09/W3", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = appTextFieldColors(),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = catatan,
+                        onValueChange = { catatan = it },
+                        label = { Text("Keterangan", fontSize = 11.sp) },
+                        placeholder = { Text("Contoh: Jatah Minggu ke-3", fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = appTextFieldColors(),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // Banner Info Akumulasi Stok: Sisa + Baru
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = BlueSurface.copy(alpha = 0.5f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BlueBorder.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = BlueAccent, modifier = Modifier.size(16.dp))
+                        Text(
+                            text = "💡 Skema Akumulasi: Kiriman baru ini otomatis ditambahkan ke sisa barang minggu lalu di Pool Rumah (Contoh: Sisa 20 + Kirim 250 = 270 Pack).",
+                            fontSize = 11.sp,
+                            color = Slate800,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+
+                // Search & Filter
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Cari nama/kode produk...", fontSize = 12.sp) },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { searchQuery = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(14.dp))
+                                }
+                            }
+                        },
+                        singleLine = true,
+                        colors = appTextFieldColors(),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Category Chips
+                if (categories.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedCategory == null,
+                            onClick = { selectedCategory = null },
+                            label = { Text("Semua (${products.size})", fontSize = 11.sp) },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Slate900,
+                                selectedLabelColor = Color.White,
+                                containerColor = Slate100,
+                                labelColor = Slate700
+                            ),
+                            border = null,
+                            modifier = Modifier.height(28.dp)
+                        )
+                        categories.forEach { cat ->
+                            val count = products.count { it.kategori == cat }
+                            FilterChip(
+                                selected = selectedCategory == cat,
+                                onClick = { selectedCategory = if (selectedCategory == cat) null else cat },
+                                label = { Text("$cat ($count)", fontSize = 11.sp) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Slate900,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Slate100,
+                                    labelColor = Slate700
+                                ),
+                                border = null,
+                                modifier = Modifier.height(28.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Products List
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredProducts, key = { it.id }) { product ->
+                        val currentQtyStr = quantities[product.id] ?: "0"
+                        val currentQty = currentQtyStr.toIntOrNull() ?: 0
+                        val drawer = drawers.find { it.productId == product.id }
+                        val poolPcsSekarang = drawer?.stokPoolGudangPcs ?: 0
+                        val rasio = product.rasioKonversi.coerceAtLeast(1)
+                        val poolPackSekarang = poolPcsSekarang / rasio
+                        val satuanBesarLabel = product.satuanBesar.ifBlank { "Pack" }
+                        val satuanKecilLabel = product.satuanKecil.ifBlank { "Pcs" }
+                        val incomingPcs = currentQty * rasio
+                        val totalPoolSetelahKiriman = poolPcsSekarang + incomingPcs
+                        val hasQty = currentQty > 0
+
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (hasQty) AmberWarning.copy(alpha = 0.08f) else Color.White
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.5.dp,
+                                if (hasQty) AmberWarning else Slate200
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(product.nama, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Slate900)
+                                        Text(
+                                            "1 $satuanBesarLabel = $rasio $satuanKecilLabel • Modal Pabrik: ${SfaViewModel.formatRupiah(product.hargaBeliPabrik)}/$satuanBesarLabel",
+                                            fontSize = 11.sp,
+                                            color = Slate500
+                                        )
+                                    }
+
+                                    // Pool Gudang Saat Ini
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Slate100
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                            horizontalAlignment = Alignment.End
+                                        ) {
+                                            Text(
+                                                "Sisa di Pool Rumah:",
+                                                fontSize = 9.sp,
+                                                color = Slate500
+                                            )
+                                            Text(
+                                                "$poolPackSekarang $satuanBesarLabel ($poolPcsSekarang $satuanKecilLabel)",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Slate800
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Stepper Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            val newQty = (currentQty - 50).coerceAtLeast(0)
+                                            quantities = quantities + (product.id to newQty.toString())
+                                        },
+                                        modifier = Modifier.size(36.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("-50", fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                    }
+
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            val newQty = (currentQty - 10).coerceAtLeast(0)
+                                            quantities = quantities + (product.id to newQty.toString())
+                                        },
+                                        modifier = Modifier.size(36.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("-10", fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                    }
+
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            val newQty = (currentQty - 1).coerceAtLeast(0)
+                                            quantities = quantities + (product.id to newQty.toString())
+                                        },
+                                        modifier = Modifier.size(36.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Remove, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    }
+
+                                    OutlinedTextField(
+                                        value = if (currentQty == 0 && currentQtyStr == "0") "" else currentQtyStr,
+                                        onValueChange = { input ->
+                                            if (input.isEmpty() || input.all { it.isDigit() }) {
+                                                quantities = quantities + (product.id to input)
+                                            }
+                                        },
+                                        placeholder = { Text("0", textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+                                        textStyle = LocalTextStyle.current.copy(
+                                            textAlign = TextAlign.Center,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        ),
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        colors = appTextFieldColors(),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(48.dp)
+                                    )
+
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            val newQty = currentQty + 1
+                                            quantities = quantities + (product.id to newQty.toString())
+                                        },
+                                        modifier = Modifier.size(36.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                                    }
+
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            val newQty = currentQty + 10
+                                            quantities = quantities + (product.id to newQty.toString())
+                                        },
+                                        modifier = Modifier.size(36.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("+10", fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                    }
+
+                                    FilledTonalIconButton(
+                                        onClick = {
+                                            val newQty = currentQty + 50
+                                            quantities = quantities + (product.id to newQty.toString())
+                                        },
+                                        modifier = Modifier.size(36.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("+50", fontWeight = FontWeight.Bold, fontSize = 9.sp)
+                                    }
+                                }
+
+                                if (hasQty) {
+                                    val totalPackSetelah = totalPoolSetelahKiriman / rasio
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(EmeraldSurface, RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Masuk: +$currentQty $satuanBesarLabel (+$incomingPcs $satuanKecilLabel)",
+                                            fontSize = 10.sp,
+                                            color = EmeraldText,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Total Pool Baru: $totalPackSetelah $satuanBesarLabel ($totalPoolSetelahKiriman $satuanKecilLabel)",
+                                            fontSize = 10.sp,
+                                            color = Slate800,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Slate200)
+
+                // Summary Total & Action Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Total Kiriman Masuk:",
+                            fontSize = 11.sp,
+                            color = Slate500
+                        )
+                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "$totalPack Pack",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Slate900
+                            )
+                            Text(
+                                text = "($totalPcsAll Pcs)",
+                                fontSize = 11.sp,
+                                color = Slate600
+                            )
+                        }
+                        if (totalEstimasiNilai > 0) {
+                            Text(
+                                text = "Estimasi Nilai: ${SfaViewModel.formatRupiah(totalEstimasiNilai)}",
+                                fontSize = 10.sp,
+                                color = Slate500
+                            )
+                        }
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Batal")
+                        }
+
+                        Button(
+                            onClick = {
+                                val items = quantities.mapNotNull { (productId, qtyStr) ->
+                                    val qty = qtyStr.toIntOrNull() ?: 0
+                                    if (qty > 0) {
+                                        val prod = products.find { it.id == productId }
+                                        val rasio = prod?.rasioKonversi ?: 1
+                                        val hBeli = prod?.hargaBeliPabrik ?: 0.0
+                                        com.example.data.repository.WeeklyShipmentInput(
+                                            productId = productId,
+                                            jumlahPack = qty,
+                                            rasioKonversi = rasio,
+                                            hargaBeliPerPack = hBeli,
+                                            nomorDoAtauNota = nomorSuratJalan,
+                                            namaSupplier = "Pabrik / Bos",
+                                            catatan = catatan
+                                        )
+                                    } else null
+                                }
+                                onSubmitBatch(items)
+                            },
+                            enabled = totalPack > 0,
+                            colors = ButtonDefaults.buttonColors(containerColor = Slate900),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (totalPack > 0) "Terima ($totalPack Pack)" else "Isi Jumlah",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -4734,7 +5272,8 @@ val context = LocalContext.current
                 HorizontalDivider(color = Slate200)
 
                 // Generator Sugesti Nama Toko (100% Non-Nama Orang, Berbasis Kategori, Titik Temu & Makna Niaga)
-                val nonPersonSuggestions = remember(kategoriWarung, alamat) {
+                var suggestionSeed by remember { mutableIntStateOf(0) }
+                val nonPersonSuggestions = remember(kategoriWarung, alamat, suggestionSeed) {
                     val locWord = when {
                         alamat.contains("Pasar", ignoreCase = true) -> "Pasar"
                         alamat.contains("Simpang", ignoreCase = true) -> "Simpang"
@@ -4751,14 +5290,18 @@ val context = LocalContext.current
                         else -> ""
                     }
 
-                    when (kategoriWarung.lowercase()) {
+                    val basePool = when (kategoriWarung.lowercase()) {
                         "warkop" -> listOf(
                             if (locWord.isNotBlank()) "Warkop $locWord Jaya" else "Warkop Pojok Santai",
                             "Warkop Simpang Empat",
                             "Warkop Berkah Rejeki",
                             "Kedai Kopi Sahabat",
                             "Warkop Sinar Harapan",
-                            "Warkop Sedulur Makmur"
+                            "Warkop Sedulur Makmur",
+                            "Warkop Titik Kumpul",
+                            "Kedai Pojok Barokah",
+                            "Warkop Harmoni Jaya",
+                            "Kopi Cangkir Rezeki"
                         )
                         "sembako" -> listOf(
                             if (locWord.isNotBlank()) "Toko Sembako $locWord" else "Toko Sembako Berkah",
@@ -4766,7 +5309,10 @@ val context = LocalContext.current
                             "Kios Sembako Barokah",
                             "Toko Sembako Sumber Rejeki",
                             "Gudang Sembako Sentosa",
-                            "Kios Sembako Lancar"
+                            "Kios Sembako Lancar",
+                            "Sembako Berkah Abadi",
+                            "Toko Sembako Murah Jaya",
+                            "Mitra Sembako Sejahtera"
                         )
                         "kantin/kios" -> listOf(
                             if (locWord.isNotBlank()) "Kios $locWord Asri" else "Kios Pojok Berkah",
@@ -4774,7 +5320,9 @@ val context = LocalContext.current
                             "Kantin Sejahtera Mandiri",
                             "Depot Sumber Rejeki",
                             "Kios Simpang Lima",
-                            "Kios Harapan Jaya"
+                            "Kios Harapan Jaya",
+                            "Kantin Berkah Rasa",
+                            "Kios Rejeki Lancar"
                         )
                         "minimarket" -> listOf(
                             if (locWord.isNotBlank()) "$locWord Mart" else "Berkah Mart",
@@ -4782,7 +5330,9 @@ val context = LocalContext.current
                             "Sumber Makmur Mart",
                             "Prima Jaya Mart",
                             "Mitra Mandiri Mart",
-                            "Sentosa Mart"
+                            "Sentosa Mart",
+                            "Keluarga Mart",
+                            "Rezeki Sejahtera Mart"
                         )
                         "grosir" -> listOf(
                             if (locWord.isNotBlank()) "Pusat Grosir $locWord" else "Pusat Grosir Berkah",
@@ -4790,7 +5340,9 @@ val context = LocalContext.current
                             "Sentosa Grosir",
                             "Grosir Sumber Rejeki",
                             "Grosir Bintang Jaya",
-                            "Grosir Serba Ada"
+                            "Grosir Serba Ada",
+                            "Grosir Maju Bersama",
+                            "Sentral Grosir Berkah"
                         )
                         else -> listOf(
                             if (locWord.isNotBlank()) "Warung $locWord Berkah" else "Warung Berkah Jaya",
@@ -4800,9 +5352,14 @@ val context = LocalContext.current
                             "Toko Barokah Sejahtera",
                             "Warung Sederhana Makmur",
                             "Toko Bintang Terang",
-                            "Warung Serba Ada"
+                            "Warung Serba Ada",
+                            "Toko Rizki Utama",
+                            "Warung Berkah Abadi",
+                            "Kios Sahabat Mandiri"
                         )
                     }
+
+                    if (suggestionSeed > 0) basePool.shuffled() else basePool
                 }
 
                 OutlinedTextField(
@@ -4821,58 +5378,83 @@ val context = LocalContext.current
                                 namaWarung = nonPersonSuggestions[nextIdx]
                             }
                         ) {
-                            Icon(Icons.Default.AutoAwesome, contentDescription = "Acak Nama Toko", tint = BlueAccent)
+                            Icon(Icons.Default.AutoAwesome, contentDescription = "Pilih Acak", tint = BlueAccent)
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Rekomendasi Nama Cepat (Non-Nama Orang)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                // Clean Modern Rekomendasi Nama Cepat (Non-Nama Orang + Tombol Acak Baru)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Slate100.copy(alpha = 0.7f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "💡 REKOMENDASI NAMA TOKO (NON-NAMA ORANG):",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            color = Slate500,
-                            letterSpacing = 0.5.sp
-                        )
-                        Text(
-                            text = "1-Klik Pilih",
-                            fontSize = 10.sp,
-                            color = BlueAccent,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        nonPersonSuggestions.forEach { suggestedName ->
-                            val isCurrent = namaWarung == suggestedName
-                            SuggestionChip(
-                                onClick = { namaWarung = suggestedName },
-                                label = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Icon(Icons.Default.Lightbulb, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(13.dp))
+                                Text(
+                                    text = "SUGESTI NAMA TOKO (NON-ORANG)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp,
+                                    color = Slate600,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable { suggestionSeed++ }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = BlueAccent, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Acak Variasi",
+                                    fontSize = 10.sp,
+                                    color = BlueAccent,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            nonPersonSuggestions.take(6).forEach { suggestedName ->
+                                val isCurrent = namaWarung == suggestedName
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = if (isCurrent) BlueAccent else Color.White,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (isCurrent) BlueAccent else Slate300
+                                    ),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { namaWarung = suggestedName }
+                                ) {
                                     Text(
                                         text = suggestedName,
                                         fontSize = 11.sp,
-                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isCurrent) Color.White else Slate800,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
-                                },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = if (isCurrent) BlueAccent else Slate100,
-                                    labelColor = if (isCurrent) Color.White else Slate800
-                                ),
-                                border = if (isCurrent) null else androidx.compose.foundation.BorderStroke(1.dp, Slate300),
-                                modifier = Modifier.height(30.dp)
-                            )
+                                }
+                            }
                         }
                     }
                 }

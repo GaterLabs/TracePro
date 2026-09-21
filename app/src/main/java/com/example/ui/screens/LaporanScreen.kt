@@ -53,6 +53,7 @@ fun LaporanScreen(
     val userProfile by viewModel.userProfile.collectAsState()
     val allTransactions by viewModel.transactions.collectAsState()
     val allDailyLoadings by viewModel.dailyLoadings.collectAsState()
+    val weeklyShipments by viewModel.weeklyShipments.collectAsState()
     val allBsSortirs by viewModel.bsSortirs.collectAsState()
     val allWriteOffs by viewModel.writeOffs.collectAsState()
     val lang by viewModel.appLanguage.collectAsState()
@@ -602,6 +603,61 @@ fun LaporanScreen(
                             letterSpacing = 0.5.sp,
                             modifier = Modifier.padding(top = 4.dp)
                         )
+                    }
+
+                    // Riwayat Kiriman Mingguan Masuk ke Pool Gudang Rumah
+                    if (weeklyShipments.isNotEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(containerColor = Slate900),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Slate800)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Icon(Icons.Default.Inventory2, contentDescription = null, tint = AmberWarning, modifier = Modifier.size(16.dp))
+                                            Text("KIRIMAN MINGGUAN DARI BOS (POOL RUMAH)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                        }
+                                        Text("${weeklyShipments.size} Transaksi", color = Slate400, fontSize = 10.sp)
+                                    }
+
+                                    weeklyShipments.take(5).forEach { ship ->
+                                        val prod = products.find { it.id == ship.productId }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(prod?.nama ?: "Produk", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                                                Text("${ship.tanggal} • ${ship.catatan.ifBlank { "Kiriman Rutin" }}", color = Slate400, fontSize = 10.sp)
+                                            }
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = Slate800
+                                            ) {
+                                                Text(
+                                                    "+${ship.jumlahPack} Pack (${ship.totalPcs} Pcs)",
+                                                    color = AmberWarning,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                        if (ship != weeklyShipments.take(5).last()) {
+                                            HorizontalDivider(color = Slate800)
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     if (dailyLoadings.isEmpty()) {

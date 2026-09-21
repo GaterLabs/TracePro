@@ -62,6 +62,7 @@ fun DashboardScreen(
     val todayKey = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
 
     // Optimized Calculations cached via remember
+    val totalPoolGudang = remember(drawers) { drawers.sumOf { it.stokPoolGudangPcs } }
     val totalFresh = remember(drawers) { drawers.sumOf { it.stokFreshPabrikPcs } }
     val totalBsBelumSortir = remember(drawers) { drawers.sumOf { it.stokBsBelumSortirPcs } }
     val totalPribadiLayak = remember(drawers) { drawers.sumOf { it.stokPribadiLayakJualPcs } }
@@ -287,12 +288,16 @@ fun DashboardScreen(
         // 4 Virtual Inventory Drawers Card
         item {
             DrawerInventorySummary(
+                stokPoolGudang = totalPoolGudang,
                 stokFresh = totalFresh,
                 stokBsBelumSortir = totalBsBelumSortir,
                 stokPribadiLayak = totalPribadiLayak,
                 stokPribadiRusak = totalPribadiRusak,
                 onSortirClick = {
                     viewModel.openTransactionDialog(TransactionDialogState.SortirBs)
+                },
+                onTerimaKirimanClick = {
+                    viewModel.openTransactionDialog(TransactionDialogState.TerimaKirimanMingguan)
                 },
                 modifier = Modifier.testTag("inventory_drawer_card"),
                 lang = lang
@@ -313,13 +318,26 @@ fun DashboardScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Muat Pagi
+                // Terima Kiriman Mingguan (Pool Gudang)
                 QuickActionButton(
-                    icon = Icons.Default.LocalShipping,
-                    title = com.example.util.AppStrings.tr("Muat Pagi", "Load Stock", lang),
-                    subtitle = com.example.util.AppStrings.tr("Inbound Pack", "Inbound Pack", lang),
+                    icon = Icons.Default.Inventory2,
+                    title = com.example.util.AppStrings.tr("Terima Kiriman", "Receive Stock", lang),
+                    subtitle = com.example.util.AppStrings.tr("Pool Rumah", "Weekly Pool", lang),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("btn_terima_kiriman"),
+                    onClick = {
+                        viewModel.openTransactionDialog(TransactionDialogState.TerimaKirimanMingguan)
+                    }
+                )
+
+                // Muat Pagi (Motor)
+                QuickActionButton(
+                    icon = Icons.Default.TwoWheeler,
+                    title = com.example.util.AppStrings.tr("Muat Motor", "Load Bike", lang),
+                    subtitle = com.example.util.AppStrings.tr("Tas Keliling", "Vehicle Bag", lang),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("btn_muat_pagi"),
