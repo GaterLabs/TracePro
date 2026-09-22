@@ -48,6 +48,11 @@ class SfaRepository(private val dao: SfaDao) {
     val allWeeklyShipments: Flow<List<WeeklyShipmentEntity>> = dao.getAllWeeklyShipments()
     val userProfile: Flow<UserProfileEntity?> = dao.getUserProfile()
     val allCustomPrices: Flow<List<WarungCustomPriceEntity>> = dao.getAllCustomPrices()
+    val allPersonalAccounts: Flow<List<PersonalAccountEntity>> = dao.getAllPersonalAccounts()
+    val allPersonalExpenses: Flow<List<PersonalExpenseEntity>> = dao.getAllPersonalExpenses()
+    val allPersonalDebts: Flow<List<PersonalDebtEntity>> = dao.getAllPersonalDebts()
+
+    fun getPersonalExpensesByDate(tanggal: String): Flow<List<PersonalExpenseEntity>> = dao.getPersonalExpensesByDate(tanggal)
 
     fun getWarungsByRute(ruteId: String): Flow<List<WarungEntity>> = dao.getWarungsByRute(ruteId)
     fun getCustomPricesByWarung(warungId: String): Flow<List<WarungCustomPriceEntity>> = dao.getCustomPricesByWarung(warungId)
@@ -649,5 +654,150 @@ class SfaRepository(private val dao: SfaDao) {
         dao.clearAllRutes()
         dao.clearAllPabriks()
         dao.clearAllDrawersCompletely()
+    }
+
+    // --- PERSONAL FINANCE REPOSITORY LOGIC ---
+
+    suspend fun insertOrUpdatePersonalAccount(account: PersonalAccountEntity) {
+        dao.insertPersonalAccount(account)
+    }
+
+    suspend fun deletePersonalAccount(account: PersonalAccountEntity) {
+        dao.deletePersonalAccount(account)
+    }
+
+    suspend fun deletePersonalAccountById(id: String) {
+        dao.deletePersonalAccountById(id)
+    }
+
+    suspend fun getPersonalAccountById(id: String): PersonalAccountEntity? {
+        return dao.getPersonalAccountById(id)
+    }
+
+    suspend fun getAllPersonalAccountsDirect(): List<PersonalAccountEntity> = dao.getAllPersonalAccountsDirect()
+
+    /**
+     * Record an expense, income, or transfer, and atomically update the involved account balances.
+     */
+    suspend fun recordPersonalExpense(expense: PersonalExpenseEntity) {
+        dao.insertPersonalExpense(expense)
+        val acc = dao.getPersonalAccountById(expense.accountId)
+        if (acc != null) {
+            when (expense.jenis) {
+                "PENGELUARAN" -> {
+                    // Reduce balance or increase used credit for paylater
+                    val newBalance = if (acc.isPaylater) acc.saldo + expense.nominal else acc.saldo - expense.nominal
+                    dao.updatePersonalAccount(acc.copy(saldo = newBalance, updatedAt = System.currentTimeMillis()))
+                }
+                "PEMASUKAN" -> {
+                    val newBalance = if (acc.isPaylater) (acc.saldo - expense.nominal).coerceAtLeast(0.0) else acc.saldo + expense.nominal
+                    dao.updatePersonalAccount(acc.copy(saldo = newBalance, updatedAt = System.currentTimeMillis()))
+                }
+                "TRANSFER" -> {
+                    // Source account reduced
+                    val newBalance = if (acc.isPaylater) acc.saldo + expense.nominal else acc.saldo - expense.nominal
+                    dao.updatePersonalAccount(acc.copy(saldo = newBalance, updatedAt = System.currentTimeMillis()))
+
+                    // Target account increased
+                    if (!expense.toAccountId.isNullOrBlank()) {
+                        val targetAcc = dao.getPersonalAccountById(expense.toAccountId)
+                        if (targetAcc != null) {
+                            val targetNewBalance = if (targetAcc.isPaylater) (targetAcc.saldo - expense.nominal).coerceAtLeast(0.0) else targetAcc.saldo + expense.nominal
+                            dao.updatePersonalAccount(targetAcc.copy(saldo = targetNewBalance, updatedAt = System.currentTimeMillis()))
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun deletePersonalExpense(expense: PersonalExpenseEntity) {
+        // Revert balance change
+        val acc = dao.getPersonalAccountById(expense.accountId)
+        if (acc != null) {
+            when (expense.jenis) {
+                "PENGELUARAN" -> {
+                    val newBalance = if (acc.isPaylater) (acc.saldo - expense.nominal).coerceAtLeast(0.0) else acc.saldo + expense.nominal
+                    dao.updatePersonalAccount(acc.copy(saldo = newBalance, updatedAt = System.currentTimeMillis()))
+                }
+                "PEMASUKAN" -> {
+                    val newBalance = if (acc.isPaylater) acc.saldo + expense.nominal else acc.saldo - expense.nominal
+                    dao.updatePersonalAccount(acc.copy(saldo = newBalance, updatedAt = System.currentTimeMillis()))
+                }
+                "TRANSFER" -> {
+                    val newBalance = if (acc.isPaylater) (acc.saldo - expense.nominal).coerceAtLeast(0.0) else acc.saldo + expense.nominal
+                    dao.updatePersonalAccount(acc.copy(saldo = newBalance, updatedAt = System.currentTimeMillis()))
+
+                    if (!expense.toAccountId.isNullOrBlank()) {
+                        val targetAcc = dao.getPersonalAccountById(expense.toAccountId)
+                        if (targetAcc != null) {
+                            val targetNewBalance = if (targetAcc.isPaylater) targetAcc.saldo + expense.nominal else targetAcc.saldo - expense.nominal
+                            dao.updatePersonalAccount(targetAcc.copy(saldo = targetNewBalance, updatedAt = System.currentTimeMillis()))
+                        }
+                    }
+                }
+            }
+        }
+        dao.deletePersonalExpense(expense)
+    }
+
+    suspend fun insertOrUpdatePersonalDebt(debt: PersonalDebtEntity) {
+        dao.insertPersonalDebt(debt)
+    }
+
+    suspend fun deletePersonalDebt(debt: PersonalDebtEntity) {
+        dao.deletePersonalDebt(debt)
+    }
+
+    /**
+     * Record installment or full payment towards a personal debt.
+     * Optionally updates a personal account balance if paid through Cash/Bank/etc.
+     */
+    suspend fun recordDebtPayment(
+        debtId: String,
+        bayarNominal: Double,
+        accountId: String? = null,
+        keterangan: String = ""
+    ) {
+        val debt = dao.getPersonalDebtById(debtId) ?: return
+        val newSisa = (debt.sisaNominal - bayarNominal).coerceAtLeast(0.0)
+        val newStatus = if (newSisa <= 0.0) "LUNAS" else "SEBAGIAN"
+
+        val nowStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale("id", "ID")).format(Date())
+        val logEntry = "{\"tanggal\":\"$nowStr\",\"nominal\":$bayarNominal,\"keterangan\":\"$keterangan\"}"
+
+        val existingLogs = debt.riwayatBayarJson.trim()
+        val updatedLogs = if (existingLogs.startsWith("[") && existingLogs.endsWith("]")) {
+            val content = existingLogs.substring(1, existingLogs.length - 1).trim()
+            if (content.isEmpty()) "[$logEntry]" else "[$content,$logEntry]"
+        } else {
+            "[$logEntry]"
+        }
+
+        dao.updatePersonalDebt(
+            debt.copy(
+                sisaNominal = newSisa,
+                status = newStatus,
+                riwayatBayarJson = updatedLogs,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+
+        // If an account is selected, record corresponding cash inflow or outflow
+        if (!accountId.isNullOrBlank()) {
+            val isPiutang = debt.jenis == "PIUTANG_SAYA" // Someone paid back to us -> Inflow
+            recordPersonalExpense(
+                PersonalExpenseEntity(
+                    id = UUID.randomUUID().toString(),
+                    jenis = if (isPiutang) "PEMASUKAN" else "PENGELUARAN",
+                    kategori = if (isPiutang) "Pelunasan Piutang" else "Bayar Hutang",
+                    nominal = bayarNominal,
+                    tanggal = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+                    accountId = accountId,
+                    judul = if (isPiutang) "Terima cicilan/lunas dari ${debt.namaPihak}" else "Bayar cicilan/lunas ke ${debt.namaPihak}",
+                    catatan = keterangan
+                )
+            )
+        }
     }
 }

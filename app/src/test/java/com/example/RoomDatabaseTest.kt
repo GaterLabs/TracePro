@@ -159,6 +159,7 @@ class RoomDatabaseTest {
 
         // 3. Kunjungan Siklus 2: Sisa Fisik di Toko = 5 Pcs (Laku = 15 Pcs)
         // Toko Bayar Lunas (15 * 1500 = Rp 22.500), Lalu Restock Baru 20 Pcs
+        // Sisa fisik 5 pcs ditarik sebagai BS (melempem/rusak) sehingga masuk stokBsBelumSortir
         repository.processTarikSisaDanRestock(
             warung = updatedWarung1,
             productId = "PROD_1",
@@ -171,16 +172,19 @@ class RoomDatabaseTest {
             gpsLat = -6.2,
             gpsLng = 106.8,
             gpsAddress = "Jl. Merdeka No 1",
-            catatan = "Lunas & Restock"
+            catatan = "Lunas & Restock",
+            tarikLayakPcs = 0,
+            tarikBsPcs = 5
         )
 
         val updatedWarung2 = dao.getWarungById("WARUNG_1")!!
-        assertEquals(20, updatedWarung2.stokTitipanPcs)
-        assertEquals(0.0, updatedWarung2.saldoPiutang, 0.01)
+        assertEquals("Warung titipan pcs should be updated to restock amount 20", 20, updatedWarung2.stokTitipanPcs)
+        assertEquals("Warung piutang should be fully paid (0.0)", 0.0, updatedWarung2.saldoPiutang, 0.01)
 
         val drawerAfterTarik = dao.getDrawerByProductId("PROD_1")!!
-        assertEquals(60, drawerAfterTarik.stokFreshPabrikPcs) // 80 - 20 = 60
-        assertEquals(5, drawerAfterTarik.stokBsBelumSortirPcs) // 5 Pcs BS masuk laci BS
+        assertEquals("Fresh pabrik drawer should be reduced by restock amount (80 - 20 = 60)", 60, drawerAfterTarik.stokFreshPabrikPcs)
+        assertEquals("BS drawer should receive the 5 pulled BS pieces", 5, drawerAfterTarik.stokBsBelumSortirPcs)
+        assertEquals("Pribadi layak jual drawer should remain 0", 0, drawerAfterTarik.stokPribadiLayakJualPcs)
     }
 
     @Test

@@ -24,9 +24,12 @@ import kotlinx.coroutines.launch
         WriteOffEntity::class,
         UserProfileEntity::class,
         WarungCustomPriceEntity::class,
-        WeeklyShipmentEntity::class
+        WeeklyShipmentEntity::class,
+        PersonalAccountEntity::class,
+        PersonalExpenseEntity::class,
+        PersonalDebtEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

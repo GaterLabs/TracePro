@@ -47,6 +47,7 @@ val AmberText = Color(0xFF92400E)
 
 // Danger (Write-off, Overdue >21d, BS Rusak)
 val RoseDanger = Color(0xFFDC2626)
+val RoseCritical = Color(0xFFDC2626)
 val RoseSurface = Color(0xFFFEF2F2)
 val RoseBorder = Color(0xFFFECACA)
 val RoseText = Color(0xFF991B1B)

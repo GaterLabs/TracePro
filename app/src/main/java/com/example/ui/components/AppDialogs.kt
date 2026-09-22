@@ -79,6 +79,8 @@ val activeDialog by viewModel.activeTransactionDialog.collectAsState()
     val customPrices by viewModel.customPrices.collectAsState()
     val pabriks by viewModel.pabriks.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
+    val personalAccounts by viewModel.personalAccounts.collectAsState()
+    val personalDebts by viewModel.personalDebts.collectAsState()
 
     receiptTx?.let { tx ->
         val warung = warungs.find { it.id == tx.warungId }
@@ -365,6 +367,54 @@ val activeDialog by viewModel.activeTransactionDialog.collectAsState()
         }
         is TransactionDialogState.EditConfig -> {
             viewModel.closeTransactionDialog()
+        }
+        is TransactionDialogState.AddEditPersonalAccount -> {
+            AddEditPersonalAccountDialog(
+                account = state.account,
+                onDismiss = { viewModel.closeTransactionDialog() },
+                onSave = { viewModel.savePersonalAccount(it) }
+            )
+        }
+        is TransactionDialogState.AddPersonalExpense -> {
+            AddPersonalExpenseDialog(
+                defaultJenis = state.defaultJenis,
+                accounts = personalAccounts,
+                onDismiss = { viewModel.closeTransactionDialog() },
+                onSubmit = { jenis, kategori, nominal, accountId, toAccountId, judul, catatan ->
+                    viewModel.recordExpense(
+                        jenis = jenis,
+                        kategori = kategori,
+                        nominal = nominal,
+                        accountId = accountId,
+                        toAccountId = toAccountId,
+                        judul = judul,
+                        catatan = catatan
+                    )
+                }
+            )
+        }
+        is TransactionDialogState.AddEditPersonalDebt -> {
+            AddEditPersonalDebtDialog(
+                debt = state.debt,
+                onDismiss = { viewModel.closeTransactionDialog() },
+                onSave = { viewModel.savePersonalDebt(it) }
+            )
+        }
+        is TransactionDialogState.BayarCicilanHutang -> {
+            val currentDebt = personalDebts.find { it.id == state.debt.id } ?: state.debt
+            BayarCicilanHutangDialog(
+                debt = currentDebt,
+                accounts = personalAccounts,
+                onDismiss = { viewModel.closeTransactionDialog() },
+                onConfirmPay = { nominal, accountId, keterangan ->
+                    viewModel.recordDebtPayment(
+                        debt = currentDebt,
+                        bayarNominal = nominal,
+                        accountId = accountId,
+                        keterangan = keterangan
+                    )
+                }
+            )
         }
         null -> {}
     }

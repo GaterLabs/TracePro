@@ -313,6 +313,17 @@ fun SfaMainApp(
                     )
 
                     DrawerNavTile(
+                        icon = Icons.Default.AccountBalanceWallet,
+                        title = com.example.util.AppStrings.navKeuangan(lang),
+                        subtitle = com.example.util.AppStrings.subKeuangan(lang),
+                        isSelected = currentScreen == AppNavScreen.KEUANGAN_PRIBADI,
+                        onClick = {
+                            viewModel.setScreen(AppNavScreen.KEUANGAN_PRIBADI)
+                            scope.launch { drawerState.close() }
+                        }
+                    )
+
+                    DrawerNavTile(
                         icon = Icons.Default.Settings,
                         title = com.example.util.AppStrings.navUtilitas(lang),
                         subtitle = com.example.util.AppStrings.subUtilitas(lang),
@@ -418,11 +429,15 @@ fun SfaMainApp(
             modifier = Modifier.fillMaxSize(),
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             bottomBar = {
-                Column {
-                    HorizontalDivider(color = Slate200, thickness = 1.dp)
+                Surface(
+                    color = Color.White,
+                    tonalElevation = 0.dp,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Slate200)
+                ) {
                     NavigationBar(
                         containerColor = Color.White,
                         tonalElevation = 0.dp,
+                        windowInsets = NavigationBarDefaults.windowInsets,
                         modifier = Modifier.testTag("main_bottom_nav")
                     ) {
                         val navItems = listOf(
@@ -455,9 +470,9 @@ fun SfaMainApp(
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = Slate950,
                                     selectedTextColor = Slate950,
-                                    unselectedIconColor = Slate600,
-                                    unselectedTextColor = Slate600,
-                                    indicatorColor = Slate200
+                                    unselectedIconColor = Slate400,
+                                    unselectedTextColor = Slate500,
+                                    indicatorColor = Slate100
                                 )
                             )
                         }
@@ -483,6 +498,7 @@ fun SfaMainApp(
                         AppNavScreen.DASHBOARD -> DashboardScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                         AppNavScreen.MASTER_DATA -> MasterDataScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                         AppNavScreen.LAPORAN -> LaporanScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
+                        AppNavScreen.KEUANGAN_PRIBADI -> com.example.ui.screens.KeuanganPribadiScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                         AppNavScreen.UTILITAS -> UtilitasScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                         AppNavScreen.MAPS -> MapsScreen(viewModel = viewModel, onOpenDrawer = { openDrawerAction() })
                     }
@@ -507,12 +523,13 @@ fun DrawerNavTile(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(10.dp),
         color = if (isSelected) Slate900 else Color.Transparent,
         border = null,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 2.dp)
+            .heightIn(min = 48.dp)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -544,15 +561,15 @@ fun DrawerNavTile(
 
             if (badge != null) {
                 Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = Slate200
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isSelected) Slate800 else Slate200
                 ) {
                     Text(
                         text = badge,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Slate800,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        color = if (isSelected) Color.White else Slate800,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -570,16 +587,18 @@ fun DrawerActionTile(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
             .clickable { onClick() }
-            .padding(horizontal = 24.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .heightIn(min = 36.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
             modifier = Modifier
-                .size(28.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .size(30.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(iconTint.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {

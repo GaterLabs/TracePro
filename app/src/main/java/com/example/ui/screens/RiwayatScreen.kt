@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -157,10 +160,18 @@ fun RiwayatScreen(
             RiwayatCategoryFilter.VISITS -> dateFilteredList.filterIsInstance<HistoryItem.VisitTransaction>()
             RiwayatCategoryFilter.LOADING -> dateFilteredList.filterIsInstance<HistoryItem.StockLoading>()
             RiwayatCategoryFilter.CLOSING -> dateFilteredList.filterIsInstance<HistoryItem.DailyClosing>()
-            RiwayatCategoryFilter.SORTIR -> dateFilteredList.filter { it is HistoryItem.BsSortir || it is HistoryItem.WriteOff }
+            RiwayatCategoryFilter.SORTIR -> dateFilteredList.filterIsInstance<HistoryItem.BsSortir>()
             RiwayatCategoryFilter.WRITEOFF -> dateFilteredList.filterIsInstance<HistoryItem.WriteOff>()
         }
     }
+
+    // Category counts for filter badges
+    val countAll = dateFilteredList.size
+    val countVisits = remember(dateFilteredList) { dateFilteredList.count { it is HistoryItem.VisitTransaction } }
+    val countLoading = remember(dateFilteredList) { dateFilteredList.count { it is HistoryItem.StockLoading } }
+    val countClosing = remember(dateFilteredList) { dateFilteredList.count { it is HistoryItem.DailyClosing } }
+    val countSortir = remember(dateFilteredList) { dateFilteredList.count { it is HistoryItem.BsSortir } }
+    val countWriteOff = remember(dateFilteredList) { dateFilteredList.count { it is HistoryItem.WriteOff } }
 
     // Search query filter
     val finalHistoryList = remember(categoryFilteredList, searchQuery, productMap, warungMap) {
@@ -209,202 +220,413 @@ fun RiwayatScreen(
         finalHistoryList.filterIsInstance<HistoryItem.VisitTransaction>().sumOf { it.entity.bsDitarikPcs }
     }
 
+    val isFilterApplied = selectedCategory != RiwayatCategoryFilter.ALL ||
+            selectedDateFilter != RiwayatDateFilter.ALL_TIME ||
+            searchQuery.isNotBlank()
+
     Column(
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color(0xFFF8FAFC))
     ) {
-        // Top App Bar / Header
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+        // Structured, Pristine Top Header Surface
+        Surface(
+            color = Color.White,
+            border = BorderStroke(1.dp, Slate200),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Top Row: Menu Button, Clean Titles, and Record Count Badge
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    IconButton(
-                        onClick = onOpenDrawer,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Slate100)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu Navigasi",
-                            tint = Slate800,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(
-                            text = AppStrings.historyTitle(lang),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Slate900
-                        )
-                        Text(
-                            text = AppStrings.historySubtitle(lang),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate500,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
+                        IconButton(
+                            onClick = onOpenDrawer,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Slate100)
+                                .testTag("btn_drawer_riwayat")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Menu Navigasi",
+                                tint = Slate800,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
 
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Slate100,
-                    border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Slate200))
-                ) {
-                    Text(
-                        text = "$totalTransactionsCount ${AppStrings.tr("Catatan", "Logs", lang)}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Slate800,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
-            }
-
-            // Search Bar
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = {
-                    Text(
-                        text = AppStrings.searchHistoryPlaceholder(lang),
-                        fontSize = 12.sp,
-                        color = Slate400
-                    )
-                },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = Slate400,
-                        modifier = Modifier.size(18.dp)
-                    )
-                },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Slate400, modifier = Modifier.size(16.dp))
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = AppStrings.tr("Riwayat Transaksi", "Transaction History", lang),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Slate900,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = AppStrings.tr("Audit trail muat, closing & kunjungan", "Audit log of loads, closing & visits", lang),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Slate500,
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
-                },
-                shape = RoundedCornerShape(10.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Slate900,
-                    unfocusedBorderColor = Slate200,
-                    focusedContainerColor = Slate50,
-                    unfocusedContainerColor = Slate50
-                ),
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-            )
 
-            // Category Filter Chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                HistoryFilterChip(
-                    label = AppStrings.filterAll(lang),
-                    isSelected = selectedCategory == RiwayatCategoryFilter.ALL,
-                    onClick = { selectedCategory = RiwayatCategoryFilter.ALL }
-                )
-                HistoryFilterChip(
-                    label = AppStrings.filterVisits(lang),
-                    isSelected = selectedCategory == RiwayatCategoryFilter.VISITS,
-                    onClick = { selectedCategory = RiwayatCategoryFilter.VISITS }
-                )
-                HistoryFilterChip(
-                    label = AppStrings.filterLoading(lang),
-                    isSelected = selectedCategory == RiwayatCategoryFilter.LOADING,
-                    onClick = { selectedCategory = RiwayatCategoryFilter.LOADING }
-                )
-                HistoryFilterChip(
-                    label = AppStrings.filterClosing(lang),
-                    isSelected = selectedCategory == RiwayatCategoryFilter.CLOSING,
-                    onClick = { selectedCategory = RiwayatCategoryFilter.CLOSING }
-                )
-                HistoryFilterChip(
-                    label = AppStrings.filterSortir(lang),
-                    isSelected = selectedCategory == RiwayatCategoryFilter.SORTIR,
-                    onClick = { selectedCategory = RiwayatCategoryFilter.SORTIR }
-                )
-            }
+                    Spacer(modifier = Modifier.width(8.dp))
 
-            // Date Filter Pills
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                DateFilterPill(
-                    label = AppStrings.filterDateAll(lang),
-                    isSelected = selectedDateFilter == RiwayatDateFilter.ALL_TIME,
-                    onClick = { selectedDateFilter = RiwayatDateFilter.ALL_TIME }
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Slate100,
+                        border = BorderStroke(1.dp, Slate200)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ReceiptLong,
+                                contentDescription = null,
+                                tint = Slate700,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Text(
+                                text = "${finalHistoryList.size} ${AppStrings.tr("Log", "Logs", lang)}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Slate800
+                            )
+                        }
+                    }
+                }
+
+                // Search Bar
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = {
+                        Text(
+                            text = AppStrings.searchHistoryPlaceholder(lang),
+                            fontSize = 12.sp,
+                            color = Slate400,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = Slate400,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Slate400, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Slate900,
+                        unfocusedBorderColor = Slate200,
+                        focusedContainerColor = Slate50,
+                        unfocusedContainerColor = Slate50,
+                        cursorColor = Slate900
+                    ),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("search_history_input")
                 )
-                DateFilterPill(
-                    label = AppStrings.filterDateToday(lang),
-                    isSelected = selectedDateFilter == RiwayatDateFilter.TODAY,
-                    onClick = { selectedDateFilter = RiwayatDateFilter.TODAY }
-                )
-                DateFilterPill(
-                    label = AppStrings.filterDate7Days(lang),
-                    isSelected = selectedDateFilter == RiwayatDateFilter.LAST_7_DAYS,
-                    onClick = { selectedDateFilter = RiwayatDateFilter.LAST_7_DAYS }
-                )
-                DateFilterPill(
-                    label = AppStrings.filterDate30Days(lang),
-                    isSelected = selectedDateFilter == RiwayatDateFilter.LAST_30_DAYS,
-                    onClick = { selectedDateFilter = RiwayatDateFilter.LAST_30_DAYS }
-                )
+
+                // Category Filter Chips Carousel
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HistoryFilterChip(
+                        label = AppStrings.filterAll(lang),
+                        count = countAll,
+                        isSelected = selectedCategory == RiwayatCategoryFilter.ALL,
+                        onClick = { selectedCategory = RiwayatCategoryFilter.ALL },
+                        icon = Icons.Default.FilterList
+                    )
+                    HistoryFilterChip(
+                        label = AppStrings.filterVisits(lang),
+                        count = countVisits,
+                        isSelected = selectedCategory == RiwayatCategoryFilter.VISITS,
+                        onClick = { selectedCategory = RiwayatCategoryFilter.VISITS },
+                        icon = Icons.Default.Storefront
+                    )
+                    HistoryFilterChip(
+                        label = AppStrings.filterLoading(lang),
+                        count = countLoading,
+                        isSelected = selectedCategory == RiwayatCategoryFilter.LOADING,
+                        onClick = { selectedCategory = RiwayatCategoryFilter.LOADING },
+                        icon = Icons.Default.LocalShipping
+                    )
+                    HistoryFilterChip(
+                        label = AppStrings.filterClosing(lang),
+                        count = countClosing,
+                        isSelected = selectedCategory == RiwayatCategoryFilter.CLOSING,
+                        onClick = { selectedCategory = RiwayatCategoryFilter.CLOSING },
+                        icon = Icons.Default.Assessment
+                    )
+                    HistoryFilterChip(
+                        label = AppStrings.tr("Sortir BS", "Sort BS", lang),
+                        count = countSortir,
+                        isSelected = selectedCategory == RiwayatCategoryFilter.SORTIR,
+                        onClick = { selectedCategory = RiwayatCategoryFilter.SORTIR },
+                        icon = Icons.Default.Autorenew
+                    )
+                    HistoryFilterChip(
+                        label = AppStrings.tr("Write-Off", "Write-Off", lang),
+                        count = countWriteOff,
+                        isSelected = selectedCategory == RiwayatCategoryFilter.WRITEOFF,
+                        onClick = { selectedCategory = RiwayatCategoryFilter.WRITEOFF },
+                        icon = Icons.Default.DeleteOutline
+                    )
+                }
+
+                // Date Period Filter Bar & Quick Reset
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(end = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = null,
+                            tint = Slate500,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = AppStrings.tr("Periode:", "Period:", lang),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Slate500
+                        )
+                    }
+
+                    val dateFilterList = listOf(
+                        RiwayatDateFilter.ALL_TIME to AppStrings.filterDateAll(lang),
+                        RiwayatDateFilter.TODAY to AppStrings.filterDateToday(lang),
+                        RiwayatDateFilter.LAST_7_DAYS to AppStrings.filterDate7Days(lang),
+                        RiwayatDateFilter.LAST_30_DAYS to AppStrings.filterDate30Days(lang)
+                    )
+
+                    dateFilterList.forEach { (dFilter, label) ->
+                        val isSelected = selectedDateFilter == dFilter
+                        DateFilterPill(
+                            label = label,
+                            isSelected = isSelected,
+                            onClick = { selectedDateFilter = dFilter }
+                        )
+                    }
+
+                    // Reset Filter Chip if any active filter
+                    if (isFilterApplied) {
+                        Surface(
+                            onClick = {
+                                selectedCategory = RiwayatCategoryFilter.ALL
+                                selectedDateFilter = RiwayatDateFilter.ALL_TIME
+                                searchQuery = ""
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            color = RoseDanger.copy(alpha = 0.1f),
+                            border = BorderStroke(1.dp, RoseDanger.copy(alpha = 0.3f))
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = null,
+                                    tint = RoseDanger,
+                                    modifier = Modifier.size(11.dp)
+                                )
+                                Text(
+                                    text = AppStrings.tr("Reset", "Reset", lang),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RoseDanger
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        HorizontalDivider(color = Slate200, thickness = 1.dp)
-
-        // KPI Metrics Row
-        Row(
+        // Summary KPI Metrics Banner Card
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Slate100)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            shape = RoundedCornerShape(10.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, Slate200),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
-            MetricPill(
-                title = AppStrings.totalCash(lang),
-                value = "Rp ${NumberFormat.getNumberInstance(Locale.GERMAN).format(totalCashReceived.toLong())}",
-                accentColor = EmeraldSuccess,
-                modifier = Modifier.weight(1.3f)
-            )
-            MetricPill(
-                title = AppStrings.totalPcsDistributed(lang),
-                value = "$totalUnitsDistributed Pcs",
-                accentColor = Color(0xFF4F46E5),
-                modifier = Modifier.weight(1f)
-            )
-            MetricPill(
-                title = AppStrings.totalBsReturned(lang),
-                value = "$totalBsReturnedCount Pcs",
-                accentColor = AmberWarning,
-                modifier = Modifier.weight(1f)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 1. Kas Masuk
+                Column(
+                    modifier = Modifier.weight(1.2f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Payments,
+                            contentDescription = null,
+                            tint = EmeraldSuccess,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = AppStrings.totalCash(lang),
+                            fontSize = 10.sp,
+                            color = Slate500,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        text = "Rp ${NumberFormat.getNumberInstance(Locale.GERMAN).format(totalCashReceived.toLong())}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = EmeraldSuccess,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(26.dp)
+                        .background(Slate200)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // 2. Terdistribusi
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocalShipping,
+                            contentDescription = null,
+                            tint = Color(0xFF2563EB),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = AppStrings.totalPcsDistributed(lang),
+                            fontSize = 10.sp,
+                            color = Slate500,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        text = "$totalUnitsDistributed Pcs",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Slate800,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(26.dp)
+                        .background(Slate200)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // 3. Retur BS
+                Column(
+                    modifier = Modifier.weight(0.9f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AssignmentReturn,
+                            contentDescription = null,
+                            tint = AmberWarning,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Text(
+                            text = AppStrings.totalBsReturned(lang),
+                            fontSize = 10.sp,
+                            color = Slate500,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        text = "$totalBsReturnedCount Pcs",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (totalBsReturnedCount > 0) AmberWarning else Slate600,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
         }
 
         // History Content List
@@ -440,11 +662,32 @@ fun RiwayatScreen(
                         color = Slate600
                     )
                     Text(
-                        text = AppStrings.tr("Lakukan transaksi kunjungan, muat barang, atau closing sore untuk melihat log di sini.", "Perform outlet visits, loading stock, or daily closing to view logs here.", lang),
+                        text = if (isFilterApplied) {
+                            AppStrings.tr("Tidak ada catatan yang cocok dengan filter atau pencarian.", "No records match your active filters or search query.", lang)
+                        } else {
+                            AppStrings.tr("Lakukan transaksi kunjungan, muat barang, atau closing sore untuk melihat log di sini.", "Perform outlet visits, loading stock, or daily closing to view logs here.", lang)
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = Slate400,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
                     )
+
+                    if (isFilterApplied) {
+                        Button(
+                            onClick = {
+                                searchQuery = ""
+                                selectedCategory = RiwayatCategoryFilter.ALL
+                                selectedDateFilter = RiwayatDateFilter.ALL_TIME
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Slate900)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(AppStrings.tr("Reset Semua Filter", "Reset All Filters", lang), fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         } else {
@@ -493,22 +736,50 @@ fun RiwayatScreen(
 @Composable
 fun HistoryFilterChip(
     label: String,
+    count: Int,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    icon: ImageVector? = null
 ) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
-        color = if (isSelected) Slate900 else Color.White,
-        border = if (isSelected) null else CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Slate200))
+        color = if (isSelected) Slate900 else Slate100,
+        border = if (isSelected) null else BorderStroke(1.dp, Slate200)
     ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) Color.White else Slate700,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isSelected) Color.White else Slate600,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) Color.White else Slate700,
+                maxLines = 1
+            )
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (isSelected) Slate700 else Slate200
+            ) {
+                Text(
+                    text = count.toString(),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isSelected) Color.White else Slate600,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+            }
+        }
     }
 }
 
@@ -520,15 +791,17 @@ fun DateFilterPill(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(6.dp),
-        color = if (isSelected) Slate800 else Slate100
+        shape = RoundedCornerShape(14.dp),
+        color = if (isSelected) Slate800 else Slate100,
+        border = if (isSelected) null else BorderStroke(1.dp, Slate200)
     ) {
         Text(
             text = label,
             fontSize = 10.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) Color.White else Slate600,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) Color.White else Slate700,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            maxLines = 1
         )
     }
 }
@@ -544,14 +817,14 @@ fun MetricPill(
         modifier = modifier,
         shape = RoundedCornerShape(8.dp),
         color = Color.White,
-        border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Slate200))
+        border = BorderStroke(1.dp, Slate200)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
-            Text(text = title, fontSize = 9.sp, color = Slate500, fontWeight = FontWeight.Medium)
-            Text(text = value, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor)
+            Text(text = title, fontSize = 9.sp, color = Slate500, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(text = value, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accentColor, maxLines = 1)
         }
     }
 }

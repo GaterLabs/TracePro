@@ -19,6 +19,7 @@ enum class AppNavScreen(val title: String, val iconName: String) {
     DASHBOARD("Dashboard", "dashboard"),
     MASTER_DATA("Master Data", "inventory"),
     LAPORAN("Laporan", "analytics"),
+    KEUANGAN_PRIBADI("Keuangan Pribadi", "account_balance_wallet"),
     UTILITAS("Utilitas", "settings"),
     MAPS("Peta & Navigasi", "map")
 }
@@ -94,6 +95,54 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 repository.deleteLegacyClosingTransactions()
+
+                // Initialize default Personal Accounts if empty
+                val existingAccounts = repository.getAllPersonalAccountsDirect()
+                if (existingAccounts.isEmpty()) {
+                    val defaultAccounts = listOf(
+                        PersonalAccountEntity(
+                            id = "ACC_CASH_DOMPET",
+                            namaAkun = "Uang Tunai / Dompet Fisik",
+                            tipeAkun = "CASH",
+                            saldo = 350000.0,
+                            catatan = "Uang cash di dompet untuk operasional harian",
+                            isPaylater = false,
+                            warnaHex = "#10B981"
+                        ),
+                        PersonalAccountEntity(
+                            id = "ACC_BANK_BCA",
+                            namaAkun = "Bank BCA",
+                            tipeAkun = "BANK",
+                            saldo = 2450000.0,
+                            nomorRekening = "8830192811",
+                            catatan = "Rekening utama penerimaan komisi & tabungan",
+                            isPaylater = false,
+                            warnaHex = "#2563EB"
+                        ),
+                        PersonalAccountEntity(
+                            id = "ACC_EWALLET_GOPAY",
+                            namaAkun = "GoPay / OVO",
+                            tipeAkun = "EWALLET",
+                            saldo = 120000.0,
+                            nomorRekening = "081234567890",
+                            catatan = "E-Wallet untuk bensin & jajan harian",
+                            isPaylater = false,
+                            warnaHex = "#06B6D4"
+                        ),
+                        PersonalAccountEntity(
+                            id = "ACC_PAYLATER_SPAY",
+                            namaAkun = "Shopee PayLater / Kredivo",
+                            tipeAkun = "PAYLATER",
+                            saldo = 450000.0, // Tagihan/pemakaian saat ini
+                            limitKredit = 3000000.0,
+                            tanggalJatuhTempo = 25,
+                            catatan = "Paylater untuk keperluan mendesak (Jatuh tempo tgl 25)",
+                            isPaylater = true,
+                            warnaHex = "#F59E0B"
+                        )
+                    )
+                    defaultAccounts.forEach { repository.insertOrUpdatePersonalAccount(it) }
+                }
             } catch (_: Exception) {}
         }
     }
@@ -164,6 +213,16 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val weeklyShipments: StateFlow<List<WeeklyShipmentEntity>> = repository.allWeeklyShipments
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // --- PERSONAL FINANCE (KEUANGAN PRIBADI, SALDO, PENGELUARAN, HUTANG/PIUTANG, PAYLATER) ---
+    val personalAccounts: StateFlow<List<PersonalAccountEntity>> = repository.allPersonalAccounts
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val personalExpenses: StateFlow<List<PersonalExpenseEntity>> = repository.allPersonalExpenses
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val personalDebts: StateFlow<List<PersonalDebtEntity>> = repository.allPersonalDebts
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Location & GPS Tracking (100% Offline Compatible)
@@ -610,6 +669,119 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.deletePabrik(pabrik)
             _feedbackSnackbar.value = "Supplier / Principal ${pabrik.namaPabrik} berhasil dihapus."
+            closeTransactionDialog()
+        }
+    }
+
+    // --- PERSONAL FINANCE ACTIONS ---
+
+    fun savePersonalAccount(account: PersonalAccountEntity) {
+        viewModelScope.launch {
+            repository.insertOrUpdatePersonalAccount(account)
+            _feedbackSnackbar.value = "Akun keuangan '${account.namaAkun}' berhasil disimpan."
+            closeTransactionDialog()
+        }
+    }
+
+    fun deletePersonalAccount(account: PersonalAccountEntity) {
+        viewModelScope.launch {
+            repository.deletePersonalAccount(account)
+            _feedbackSnackbar.value = "Akun '${account.namaAkun}' berhasil dihapus."
+            closeTransactionDialog()
+        }
+    }
+
+    fun recordExpense(
+        jenis: String,
+        kategori: String,
+        nominal: Double,
+        accountId: String,
+        toAccountId: String? = null,
+        judul: String,
+        catatan: String = "",
+        fotoNotaUri: String = ""
+    ) {
+        viewModelScope.launch {
+            if (nominal <= 0) {
+                _feedbackSnackbar.value = "Nominal harus lebih dari Rp 0."
+                return@launch
+            }
+            if (accountId.isBlank()) {
+                _feedbackSnackbar.value = "Pilih akun/dompet asal terlebih dahulu."
+                return@launch
+            }
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val expense = PersonalExpenseEntity(
+                id = UUID.randomUUID().toString(),
+                jenis = jenis,
+                kategori = kategori,
+                nominal = nominal,
+                tanggal = todayStr,
+                accountId = accountId,
+                toAccountId = toAccountId,
+                judul = judul.ifBlank { kategori },
+                catatan = catatan,
+                fotoNotaUri = fotoNotaUri
+            )
+            repository.recordPersonalExpense(expense)
+            val actionLabel = if (jenis == "PENGELUARAN") "Pengeluaran" else if (jenis == "PEMASUKAN") "Pemasukan" else "Transfer antar akun"
+            _feedbackSnackbar.value = "$actionLabel sebesar ${formatRupiah(nominal)} berhasil dicatat & saldo akun diperbarui!"
+            closeTransactionDialog()
+        }
+    }
+
+    fun deletePersonalExpense(expense: PersonalExpenseEntity) {
+        viewModelScope.launch {
+            repository.deletePersonalExpense(expense)
+            _feedbackSnackbar.value = "Catatan transaksi ${expense.judul} dihapus & saldo dikembalikan."
+        }
+    }
+
+    fun savePersonalDebt(debt: PersonalDebtEntity) {
+        viewModelScope.launch {
+            if (debt.totalNominal <= 0) {
+                _feedbackSnackbar.value = "Nominal hutang/piutang harus lebih dari 0."
+                return@launch
+            }
+            if (debt.namaPihak.isBlank()) {
+                _feedbackSnackbar.value = "Nama teman / keluarga wajib diisi."
+                return@launch
+            }
+            repository.insertOrUpdatePersonalDebt(debt)
+            val label = if (debt.jenis == "PIUTANG_SAYA") "Piutang (Teman/Keluarga pinjam ke kita)" else "Hutang (Kita berhutang)"
+            _feedbackSnackbar.value = "$label '${debt.namaPihak}' berhasil disimpan."
+            closeTransactionDialog()
+        }
+    }
+
+    fun deletePersonalDebt(debt: PersonalDebtEntity) {
+        viewModelScope.launch {
+            repository.deletePersonalDebt(debt)
+            _feedbackSnackbar.value = "Catatan hutang/piutang '${debt.namaPihak}' berhasil dihapus."
+            closeTransactionDialog()
+        }
+    }
+
+    fun recordDebtPayment(
+        debt: PersonalDebtEntity,
+        bayarNominal: Double,
+        accountId: String? = null,
+        keterangan: String = ""
+    ) {
+        viewModelScope.launch {
+            if (bayarNominal <= 0) {
+                _feedbackSnackbar.value = "Nominal cicilan/pelunasan harus lebih dari 0."
+                return@launch
+            }
+            repository.recordDebtPayment(
+                debtId = debt.id,
+                bayarNominal = bayarNominal,
+                accountId = accountId,
+                keterangan = keterangan
+            )
+            val sisa = (debt.sisaNominal - bayarNominal).coerceAtLeast(0.0)
+            val statusMsg = if (sisa <= 0.0) "LUNAS TOTAL!" else "Sisa ${formatRupiah(sisa)}"
+            _feedbackSnackbar.value = "Pembayaran ${formatRupiah(bayarNominal)} untuk ${debt.namaPihak} berhasil dicatat ($statusMsg)"
             closeTransactionDialog()
         }
     }
@@ -1090,4 +1262,10 @@ sealed class TransactionDialogState {
     data class BayarHutangSupplier(val loading: DailyLoadingEntity) : TransactionDialogState()
     object TerimaKirimanMingguan : TransactionDialogState()
     object RekapMingguanBos : TransactionDialogState()
+
+    // Personal Finance Dialog States
+    data class AddEditPersonalAccount(val account: PersonalAccountEntity?) : TransactionDialogState()
+    data class AddPersonalExpense(val defaultJenis: String = "PENGELUARAN") : TransactionDialogState()
+    data class AddEditPersonalDebt(val debt: PersonalDebtEntity?) : TransactionDialogState()
+    data class BayarCicilanHutang(val debt: PersonalDebtEntity) : TransactionDialogState()
 }

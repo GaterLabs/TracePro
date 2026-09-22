@@ -281,4 +281,79 @@ interface SfaDao {
 
     @Query("SELECT * FROM weekly_shipments")
     suspend fun getAllWeeklyShipmentsDirect(): List<WeeklyShipmentEntity>
+
+    // --- PERSONAL FINANCE (KEUANGAN PRIBADI: AKUN, PENGELUARAN, HUTANG/PIUTANG) ---
+    @Query("SELECT * FROM personal_accounts ORDER BY isPaylater ASC, namaAkun ASC")
+    fun getAllPersonalAccounts(): Flow<List<PersonalAccountEntity>>
+
+    @Query("SELECT * FROM personal_accounts WHERE id = :id")
+    suspend fun getPersonalAccountById(id: String): PersonalAccountEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPersonalAccount(account: PersonalAccountEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPersonalAccounts(accounts: List<PersonalAccountEntity>)
+
+    @Update
+    suspend fun updatePersonalAccount(account: PersonalAccountEntity)
+
+    @Delete
+    suspend fun deletePersonalAccount(account: PersonalAccountEntity)
+
+    @Query("DELETE FROM personal_accounts WHERE id = :id")
+    suspend fun deletePersonalAccountById(id: String)
+
+    @Query("SELECT * FROM personal_accounts")
+    suspend fun getAllPersonalAccountsDirect(): List<PersonalAccountEntity>
+
+    // Personal Expenses / Incomes
+    @Query("SELECT * FROM personal_expenses ORDER BY tanggal DESC, timestamp DESC")
+    fun getAllPersonalExpenses(): Flow<List<PersonalExpenseEntity>>
+
+    @Query("SELECT * FROM personal_expenses WHERE tanggal = :tanggal ORDER BY timestamp DESC")
+    fun getPersonalExpensesByDate(tanggal: String): Flow<List<PersonalExpenseEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPersonalExpense(expense: PersonalExpenseEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPersonalExpenses(expenses: List<PersonalExpenseEntity>)
+
+    @Update
+    suspend fun updatePersonalExpense(expense: PersonalExpenseEntity)
+
+    @Delete
+    suspend fun deletePersonalExpense(expense: PersonalExpenseEntity)
+
+    @Query("DELETE FROM personal_expenses WHERE id = :id")
+    suspend fun deletePersonalExpenseById(id: String)
+
+    @Query("SELECT * FROM personal_expenses")
+    suspend fun getAllPersonalExpensesDirect(): List<PersonalExpenseEntity>
+
+    // Personal Debts & Receivables
+    @Query("SELECT * FROM personal_debts ORDER BY status ASC, updatedAt DESC")
+    fun getAllPersonalDebts(): Flow<List<PersonalDebtEntity>>
+
+    @Query("SELECT * FROM personal_debts WHERE id = :id")
+    suspend fun getPersonalDebtById(id: String): PersonalDebtEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPersonalDebt(debt: PersonalDebtEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPersonalDebts(debts: List<PersonalDebtEntity>)
+
+    @Update
+    suspend fun updatePersonalDebt(debt: PersonalDebtEntity)
+
+    @Delete
+    suspend fun deletePersonalDebt(debt: PersonalDebtEntity)
+
+    @Query("DELETE FROM personal_debts WHERE id = :id")
+    suspend fun deletePersonalDebtById(id: String)
+
+    @Query("SELECT * FROM personal_debts")
+    suspend fun getAllPersonalDebtsDirect(): List<PersonalDebtEntity>
 }

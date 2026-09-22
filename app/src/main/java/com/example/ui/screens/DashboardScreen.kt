@@ -52,6 +52,8 @@ fun DashboardScreen(
     val dailyLoadings by viewModel.dailyLoadings.collectAsState()
     val products by viewModel.products.collectAsState()
     val userProfile by viewModel.userProfile.collectAsState()
+    val personalAccounts by viewModel.personalAccounts.collectAsState()
+    val personalDebts by viewModel.personalDebts.collectAsState()
     val lang by viewModel.appLanguage.collectAsState()
 
     val todayDateStr = remember(lang) {
@@ -438,6 +440,120 @@ fun DashboardScreen(
             }
         }
 
+        // Personal Finance Summary Card (Dompet Pribadi, Hutang/Piutang & Paylater)
+        item {
+            val totalKasPribadi = remember(personalAccounts) {
+                personalAccounts.filter { !it.isPaylater }.sumOf { it.saldo }
+            }
+            val totalTagihanPaylater = remember(personalAccounts) {
+                personalAccounts.filter { it.isPaylater }.sumOf { it.saldo }
+            }
+            val totalPiutangTeman = remember(personalDebts) {
+                personalDebts.filter { it.jenis == "PIUTANG_SAYA" && it.status != "LUNAS" }.sumOf { it.sisaNominal }
+            }
+            val totalHutangSaya = remember(personalDebts) {
+                personalDebts.filter { it.jenis == "HUTANG_SAYA" && it.status != "LUNAS" }.sumOf { it.sisaNominal }
+            }
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.setScreen(AppNavScreen.KEUANGAN_PRIBADI) }
+                    .testTag("dashboard_personal_finance_card"),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Slate200))
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Slate900),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AccountBalanceWallet,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = com.example.util.AppStrings.tr("KEUANGAN & DOMPET PRIBADI", "PERSONAL FINANCE & WALLET", lang),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Slate900
+                                )
+                                Text(
+                                    text = com.example.util.AppStrings.tr("Saldo tunai, bank, hutang teman & paylater", "Cash, bank, debts & paylater", lang),
+                                    fontSize = 10.sp,
+                                    color = Slate500
+                                )
+                            }
+                        }
+
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = Slate400,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    HorizontalDivider(color = Slate100, thickness = 1.dp)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(com.example.util.AppStrings.tr("Saldo Kas & Bank", "Cash & Bank", lang), fontSize = 10.sp, color = Slate500)
+                            Text(
+                                text = SfaViewModel.formatRupiah(totalKasPribadi),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldSuccess
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(com.example.util.AppStrings.tr("Tagihan Paylater", "Paylater Bills", lang), fontSize = 10.sp, color = Slate500)
+                            Text(
+                                text = SfaViewModel.formatRupiah(totalTagihanPaylater),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (totalTagihanPaylater > 0) AmberWarning else Slate700
+                            )
+                        }
+
+                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+                            Text(com.example.util.AppStrings.tr("Piutang Teman", "Owed by Friends", lang), fontSize = 10.sp, color = Slate500)
+                            Text(
+                                text = SfaViewModel.formatRupiah(totalPiutangTeman),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2563EB)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Active Route Progress
         item {
             val activeRute = rutes.firstOrNull()
@@ -627,7 +743,9 @@ private fun QuickActionButton(
     onClick: () -> Unit
 ) {
     Card(
-        modifier = modifier.clickable { onClick() },
+        modifier = modifier
+            .clickable { onClick() }
+            .heightIn(min = 90.dp),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White,
@@ -639,7 +757,7 @@ private fun QuickActionButton(
         )
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             horizontalAlignment = Alignment.Start
         ) {

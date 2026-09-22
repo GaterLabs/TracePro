@@ -3,6 +3,7 @@ package com.example.ui.screens
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -847,7 +848,7 @@ fun WarungOperationalCard(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Header: Outlet Image + Urutan + Nama Warung + Status + Distance & Visited Badges
+            // Header: Outlet Image + Urutan + Nama Warung + Status Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -856,8 +857,8 @@ fun WarungOperationalCard(
                 // Outlet Photo with Urutan tag
                 Box(
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(8.dp))
+                        .size(54.dp)
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Slate100),
                     contentAlignment = Alignment.Center
                 ) {
@@ -873,12 +874,12 @@ fun WarungOperationalCard(
                             imageVector = Icons.Default.Storefront,
                             contentDescription = null,
                             tint = if (isVisitedToday) Slate400 else Slate600,
-                            modifier = Modifier.size(28.dp)
+                            modifier = Modifier.size(26.dp)
                         )
                     }
 
                     Surface(
-                        shape = RoundedCornerShape(topStart = 0.dp, bottomEnd = 6.dp),
+                        shape = RoundedCornerShape(topStart = 0.dp, bottomEnd = 8.dp),
                         color = if (isVisitedToday) Slate600 else Slate900.copy(alpha = 0.9f),
                         modifier = Modifier.align(Alignment.TopStart)
                     ) {
@@ -887,12 +888,12 @@ fun WarungOperationalCard(
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                         )
                     }
                 }
 
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -907,6 +908,8 @@ fun WarungOperationalCard(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
+
+                        Spacer(modifier = Modifier.width(6.dp))
 
                         if (isBlacklist) {
                             Surface(
@@ -955,16 +958,17 @@ fun WarungOperationalCard(
                         text = "${warung.namaPemilik.ifEmpty { "-" }} • ${warung.kategoriWarung}",
                         style = MaterialTheme.typography.bodySmall,
                         color = Slate500,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    // Visit aging & notes
+                    // Visit aging pill & notes
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Aging badge
                         Surface(
                             shape = RoundedCornerShape(4.dp),
                             color = when {
@@ -990,7 +994,7 @@ fun WarungOperationalCard(
                                     daysSinceVisit == 0 -> EmeraldText
                                     else -> Slate600
                                 },
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
                     }
@@ -1018,21 +1022,23 @@ fun WarungOperationalCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Slate100, RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Slate50)
+                    .border(1.dp, Slate200, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(
                         imageVector = Icons.Default.NearMe,
                         contentDescription = null,
                         tint = EmeraldSuccess,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                     Column {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1044,7 +1050,7 @@ fun WarungOperationalCard(
                             )
                             Text(
                                 text = AppStrings.tr("(dari titik Anda)", "(from your location)", lang),
-                                fontSize = 9.sp,
+                                fontSize = 10.sp,
                                 color = Slate500
                             )
                         }
@@ -1059,6 +1065,8 @@ fun WarungOperationalCard(
                     }
                 }
 
+                Spacer(modifier = Modifier.width(6.dp))
+
                 // Google Maps Direct Navigation Button
                 Button(
                     onClick = onNavigateGmaps,
@@ -1067,89 +1075,98 @@ fun WarungOperationalCard(
                         containerColor = Slate900,
                         contentColor = Color.White
                     ),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(28.dp)
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(30.dp)
                 ) {
-                    Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(13.dp))
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text("GMaps", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("GMaps", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            HorizontalDivider(color = Slate100, thickness = 1.dp)
-
-            // Stock & Debt Metrics
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Stock & Debt Metrics Container
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Slate50)
+                    .border(1.dp, Slate200, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Titipan Aktif
-                Column {
-                    Text(
-                        text = AppStrings.tr("STOK TITIPAN", "CONSIGNMENT STOCK", lang),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Slate500,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp
-                    )
-                    Text(
-                        text = "${warung.stokTitipanPcs} Pcs",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Slate900
-                    )
-                }
-
-                // Saldo Piutang (Bon)
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = AppStrings.tr("SALDO BON", "DEBT BALANCE", lang),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Slate500,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 0.5.sp
-                    )
-                    Text(
-                        text = SfaViewModel.formatRupiah(warung.saldoPiutang),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (warung.saldoPiutang > 0) AmberWarning else EmeraldSuccess
-                    )
-                }
-            }
-
-            // Debt limit bar if there's debt
-            if (warung.saldoPiutang > 0) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Titipan Aktif
+                    Column {
                         Text(
-                            text = "${AppStrings.tr("Limit Hutang", "Debt Limit", lang)}: ${SfaViewModel.formatRupiah(warung.limitHutangMaksimal)}",
+                            text = AppStrings.tr("STOK TITIPAN", "CONSIGNMENT STOCK", lang),
                             style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            color = Slate400
+                            color = Slate500,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.5.sp
                         )
                         Text(
-                            text = "${(debtRatio * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
+                            text = "${warung.stokTitipanPcs} Pcs",
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = if (debtRatio > 0.8f) RoseDanger else AmberWarning
+                            color = Slate900
                         )
                     }
-                    LinearProgressIndicator(
-                        progress = { debtRatio },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(CircleShape),
-                        color = if (debtRatio > 0.8f) RoseDanger else AmberWarning,
-                        trackColor = Slate100
-                    )
+
+                    // Saldo Piutang (Bon)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = AppStrings.tr("SALDO BON", "DEBT BALANCE", lang),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Slate500,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = SfaViewModel.formatRupiah(warung.saldoPiutang),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (warung.saldoPiutang > 0) AmberWarning else EmeraldSuccess
+                        )
+                    }
+                }
+
+                // Debt limit bar if there's debt
+                if (warung.saldoPiutang > 0) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "${AppStrings.tr("Limit Hutang", "Debt Limit", lang)}: ${SfaViewModel.formatRupiah(warung.limitHutangMaksimal)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 9.sp,
+                                color = Slate500
+                            )
+                            Text(
+                                text = "${(debtRatio * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (debtRatio > 0.8f) RoseDanger else AmberWarning
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { debtRatio },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(CircleShape),
+                            color = if (debtRatio > 0.8f) RoseDanger else AmberWarning,
+                            trackColor = Slate200
+                        )
+                    }
                 }
             }
 
