@@ -864,6 +864,15 @@ fun UtilitasScreen(
                             subtitle = com.example.util.AppStrings.tr("Hapus seluruh master warung, produk, rute, pabrik & transaksi untuk input data riil", "Delete all master stores, products, routes, suppliers & transactions for real data entry", lang),
                             onClick = { showExportSuccessDialog = "WIPE_ALL_CONFIRM" }
                         )
+
+                        HorizontalDivider(color = Slate100, thickness = 1.dp)
+
+                        SettingTile(
+                            icon = Icons.Default.AccountBalanceWallet,
+                            title = com.example.util.AppStrings.tr("Kosongkan Data Keuangan Pribadi", "Clear Personal Finance Data", lang),
+                            subtitle = com.example.util.AppStrings.tr("Hapus seluruh akun dompet, mutasi pengeluaran/pemasukan & catatan hutang pribadi", "Delete all personal wallets, expenses/income & debts", lang),
+                            onClick = { showExportSuccessDialog = "CLEAR_PERSONAL_CONFIRM" }
+                        )
                     }
                 }
             }
@@ -1042,6 +1051,40 @@ fun UtilitasScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = RoseDanger)
                     ) {
                         Text(com.example.util.AppStrings.tr("Wipe Bersih Total", "Wipe Entire Database", lang), fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showExportSuccessDialog = null }) {
+                        Text(com.example.util.AppStrings.btnCancel(lang), color = Slate700)
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                containerColor = Color.White
+            )
+        } else if (showExportSuccessDialog == "CLEAR_PERSONAL_CONFIRM") {
+            AlertDialog(
+                onDismissRequest = { showExportSuccessDialog = null },
+                title = { Text(com.example.util.AppStrings.tr("Kosongkan Data Keuangan Pribadi", "Clear Personal Finance Data", lang), fontWeight = FontWeight.Bold, color = Slate900) },
+                text = {
+                    Text(
+                        com.example.util.AppStrings.tr(
+                            "Apakah Anda yakin ingin menghapus seluruh data dompet, rekening, mutasi pengeluaran/pemasukan, dan buku hutang pribadi? Data operasional toko/produk/transaksi tidak akan terpengaruh.",
+                            "Are you sure you want to clear all wallets, accounts, expense/income transactions, and personal debt records? Store/product/sales data will not be affected.",
+                            lang
+                        ),
+                        color = Slate700,
+                        fontSize = 13.sp
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.clearAllPersonalFinanceData()
+                            showExportSuccessDialog = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RoseDanger)
+                    ) {
+                        Text(com.example.util.AppStrings.tr("Ya, Kosongkan", "Yes, Clear", lang), fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 },
                 dismissButton = {

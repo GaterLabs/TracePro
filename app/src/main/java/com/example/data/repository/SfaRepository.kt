@@ -654,6 +654,23 @@ class SfaRepository(private val dao: SfaDao) {
         dao.clearAllRutes()
         dao.clearAllPabriks()
         dao.clearAllDrawersCompletely()
+        dao.clearAllPersonalExpenses()
+        dao.clearAllPersonalDebts()
+        dao.clearAllPersonalAccounts()
+    }
+
+    suspend fun clearAllPersonalFinance() {
+        dao.clearAllPersonalExpenses()
+        dao.clearAllPersonalDebts()
+        dao.clearAllPersonalAccounts()
+    }
+
+    suspend fun purgeMockPersonalData() {
+        dao.deleteMockPersonalExpenses()
+        val mockAccountIds = listOf("ACC_CASH_DOMPET", "ACC_BANK_BCA", "ACC_EWALLET_GOPAY", "ACC_PAYLATER_SPAY")
+        mockAccountIds.forEach { id ->
+            dao.deletePersonalAccountById(id)
+        }
     }
 
     // --- PERSONAL FINANCE REPOSITORY LOGIC ---

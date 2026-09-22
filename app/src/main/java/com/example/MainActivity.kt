@@ -347,26 +347,6 @@ fun SfaMainApp(
                     )
 
                     DrawerActionTile(
-                        icon = Icons.Default.LocalShipping,
-                        title = com.example.util.AppStrings.actionMuatPagi(lang),
-                        iconTint = Color(0xFF4F46E5),
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            viewModel.openTransactionDialog(TransactionDialogState.MuatPagi)
-                        }
-                    )
-
-                    DrawerActionTile(
-                        icon = Icons.Default.Autorenew,
-                        title = com.example.util.AppStrings.actionSortirBs(lang),
-                        iconTint = AmberWarning,
-                        onClick = {
-                            scope.launch { drawerState.close() }
-                            viewModel.openTransactionDialog(TransactionDialogState.SortirBs)
-                        }
-                    )
-
-                    DrawerActionTile(
                         icon = Icons.Default.CloudUpload,
                         title = com.example.util.AppStrings.actionExportBackup(lang),
                         iconTint = Slate800,

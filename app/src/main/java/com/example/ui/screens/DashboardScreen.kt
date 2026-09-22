@@ -295,9 +295,6 @@ fun DashboardScreen(
                 stokBsBelumSortir = totalBsBelumSortir,
                 stokPribadiLayak = totalPribadiLayak,
                 stokPribadiRusak = totalPribadiRusak,
-                onSortirClick = {
-                    viewModel.openTransactionDialog(TransactionDialogState.SortirBs)
-                },
                 onTerimaKirimanClick = {
                     viewModel.openTransactionDialog(TransactionDialogState.TerimaKirimanMingguan)
                 },
@@ -332,19 +329,6 @@ fun DashboardScreen(
                         .testTag("btn_terima_kiriman"),
                     onClick = {
                         viewModel.openTransactionDialog(TransactionDialogState.TerimaKirimanMingguan)
-                    }
-                )
-
-                // Muat Pagi (Motor)
-                QuickActionButton(
-                    icon = Icons.Default.TwoWheeler,
-                    title = com.example.util.AppStrings.tr("Muat Motor", "Load Bike", lang),
-                    subtitle = com.example.util.AppStrings.tr("Tas Keliling", "Vehicle Bag", lang),
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("btn_muat_pagi"),
-                    onClick = {
-                        viewModel.openTransactionDialog(TransactionDialogState.MuatPagi)
                     }
                 )
 

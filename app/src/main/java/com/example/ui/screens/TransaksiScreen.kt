@@ -380,30 +380,6 @@ fun TransaksiScreen(
                                     LocationHelper.shareExportedMapFile(context, kml, "rute_outlet.kml", "application/vnd.google-earth.kml+xml")
                                 }
                             )
-
-                            HorizontalDivider(color = Slate100)
-
-                            DropdownMenuItem(
-                                text = { Text(AppStrings.tr("Muat Pagi (Loading Pack)", "Morning Load (Loading Pack)", lang), fontSize = 13.sp) },
-                                leadingIcon = {
-                                    Icon(Icons.Default.LocalShipping, contentDescription = null, tint = Slate700, modifier = Modifier.size(18.dp))
-                                },
-                                onClick = {
-                                    showTopActionMenu = false
-                                    viewModel.openTransactionDialog(TransactionDialogState.MuatPagi)
-                                }
-                            )
-
-                            DropdownMenuItem(
-                                text = { Text(AppStrings.tr("Sortir Retur & Repack", "Sort Returns & Repack", lang), fontSize = 13.sp) },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Autorenew, contentDescription = null, tint = Slate700, modifier = Modifier.size(18.dp))
-                                },
-                                onClick = {
-                                    showTopActionMenu = false
-                                    viewModel.openTransactionDialog(TransactionDialogState.SortirBs)
-                                }
-                            )
                         }
                     }
                 }

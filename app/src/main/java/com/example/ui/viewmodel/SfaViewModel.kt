@@ -96,53 +96,8 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 repository.deleteLegacyClosingTransactions()
 
-                // Initialize default Personal Accounts if empty
-                val existingAccounts = repository.getAllPersonalAccountsDirect()
-                if (existingAccounts.isEmpty()) {
-                    val defaultAccounts = listOf(
-                        PersonalAccountEntity(
-                            id = "ACC_CASH_DOMPET",
-                            namaAkun = "Uang Tunai / Dompet Fisik",
-                            tipeAkun = "CASH",
-                            saldo = 350000.0,
-                            catatan = "Uang cash di dompet untuk operasional harian",
-                            isPaylater = false,
-                            warnaHex = "#10B981"
-                        ),
-                        PersonalAccountEntity(
-                            id = "ACC_BANK_BCA",
-                            namaAkun = "Bank BCA",
-                            tipeAkun = "BANK",
-                            saldo = 2450000.0,
-                            nomorRekening = "8830192811",
-                            catatan = "Rekening utama penerimaan komisi & tabungan",
-                            isPaylater = false,
-                            warnaHex = "#2563EB"
-                        ),
-                        PersonalAccountEntity(
-                            id = "ACC_EWALLET_GOPAY",
-                            namaAkun = "GoPay / OVO",
-                            tipeAkun = "EWALLET",
-                            saldo = 120000.0,
-                            nomorRekening = "081234567890",
-                            catatan = "E-Wallet untuk bensin & jajan harian",
-                            isPaylater = false,
-                            warnaHex = "#06B6D4"
-                        ),
-                        PersonalAccountEntity(
-                            id = "ACC_PAYLATER_SPAY",
-                            namaAkun = "Shopee PayLater / Kredivo",
-                            tipeAkun = "PAYLATER",
-                            saldo = 450000.0, // Tagihan/pemakaian saat ini
-                            limitKredit = 3000000.0,
-                            tanggalJatuhTempo = 25,
-                            catatan = "Paylater untuk keperluan mendesak (Jatuh tempo tgl 25)",
-                            isPaylater = true,
-                            warnaHex = "#F59E0B"
-                        )
-                    )
-                    defaultAccounts.forEach { repository.insertOrUpdatePersonalAccount(it) }
-                }
+                // Purge any mock/dummy personal accounts and mock expenses
+                repository.purgeMockPersonalData()
             } catch (_: Exception) {}
         }
     }
@@ -359,24 +314,6 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- BUSINESS ACTIONS ---
 
-    fun executeBatchLoadingPagi(items: List<com.example.data.repository.LoadingItemInput>) {
-        viewModelScope.launch {
-            val validItems = items.filter { it.jumlahDus > 0 }
-            if (validItems.isEmpty()) {
-                _feedbackSnackbar.value = "Tidak ada barang yang dimuat (Kuantiti 0)."
-                return@launch
-            }
-            repository.processBatchDailyLoading(validItems)
-            val totalPack = validItems.sumOf { it.jumlahDus }
-            val totalPcs = validItems.sumOf { it.jumlahDus * it.rasioKonversi }
-            val hasCash = validItems.any { it.opsiBayarMuat == "BAYAR_LANGSUNG" }
-            val hasDebt = validItems.any { it.opsiBayarMuat == "HUTANG" }
-            val noteStatus = if (hasCash) " (Bayar Cash Langsung)" else if (hasDebt) " (Dicatat Hutang/Tempo)" else " (Konsinyasi Closing)"
-            _feedbackSnackbar.value = "Berhasil muat ${validItems.size} produk (Total $totalPack Pack / $totalPcs Pcs)$noteStatus ke Stok Fresh Mobil!"
-            closeTransactionDialog()
-        }
-    }
-
     fun executeBatchWeeklyShipment(items: List<com.example.data.repository.WeeklyShipmentInput>) {
         viewModelScope.launch {
             val validItems = items.filter { it.jumlahPack > 0 }
@@ -406,24 +343,6 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
             _feedbackSnackbar.value = "Pembayaran hutang supplier sebesar ${formatRupiah(bayarAmount)} $namaProduk berhasil dicatat!"
             closeTransactionDialog()
         }
-    }
-
-    fun executeLoadingPagi(
-        productId: String,
-        jumlahDus: Int,
-        rasio: Int,
-        hargaBeliDus: Double
-    ) {
-        executeBatchLoadingPagi(
-            listOf(
-                com.example.data.repository.LoadingItemInput(
-                    productId = productId,
-                    jumlahDus = jumlahDus,
-                    rasioKonversi = rasio,
-                    hargaBeliDus = hargaBeliDus
-                )
-            )
-        )
     }
 
     fun executeTitipBaru(
@@ -488,30 +407,6 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
                 tarikBsPcs = tarikBsPcs
             )
             _feedbackSnackbar.value = "Transaksi Toko Selesai: Laku ${sisaTitipanLalu - sisaFisik} Pcs, Tarik $sisaFisik Pcs (Layak: $tarikLayakPcs, BS: $tarikBsPcs), Bayar ${formatRupiah(uangDiterima)}"
-            closeTransactionDialog()
-        }
-    }
-
-    fun executeSortirBs(
-        productId: String,
-        totalBsAwal: Int,
-        bsLayakJual: Int,
-        bsRusak: Int,
-        hargaBeliPcs: Double,
-        hargaJualPcs: Double,
-        catatan: String
-    ) {
-        viewModelScope.launch {
-            repository.processSortirBs(
-                productId = productId,
-                totalBsAwal = totalBsAwal,
-                bsLayakJual = bsLayakJual,
-                bsRusak = bsRusak,
-                hargaBeliPcs = hargaBeliPcs,
-                hargaJualPcs = hargaJualPcs,
-                catatan = catatan
-            )
-            _feedbackSnackbar.value = "Sortir Retur Selesai: +$bsLayakJual Pcs Layak Jual (Aset Mandiri), $bsRusak Pcs Afkir Rusak"
             closeTransactionDialog()
         }
     }
@@ -797,6 +692,13 @@ class SfaViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.wipeAllDataCompletely()
             _feedbackSnackbar.value = "Seluruh database berhasil dikosongkan secara total (Fresh Production Start)."
+        }
+    }
+
+    fun clearAllPersonalFinanceData() {
+        viewModelScope.launch {
+            repository.clearAllPersonalFinance()
+            _feedbackSnackbar.value = "Seluruh data keuangan pribadi (akun, mutasi & hutang) berhasil dikosongkan."
         }
     }
 
@@ -1238,10 +1140,8 @@ data class ClosingSummaryData(
 )
 
 sealed class TransactionDialogState {
-    object MuatPagi : TransactionDialogState()
     data class TitipBaru(val warung: WarungEntity) : TransactionDialogState()
     data class TarikSisa(val warung: WarungEntity) : TransactionDialogState()
-    object SortirBs : TransactionDialogState()
     object ClosingSore : TransactionDialogState()
     data class AddEditProduct(val product: ProductEntity?) : TransactionDialogState()
     data class AddEditWarung(val warung: WarungEntity?) : TransactionDialogState()

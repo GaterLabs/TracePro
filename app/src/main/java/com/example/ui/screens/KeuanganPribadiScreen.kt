@@ -1416,13 +1416,37 @@ private fun KeuanganDompetTab(
         }
 
         // Standard Cash / Bank Accounts
-        items(standardAccounts, key = { it.id }) { acc ->
-            AccountCardItem(
-                account = acc,
-                lang = lang,
-                onEdit = { viewModel.openTransactionDialog(TransactionDialogState.AddEditPersonalAccount(acc)) },
-                onDelete = { viewModel.deletePersonalAccount(acc) }
-            )
+        if (standardAccounts.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Slate200))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = AppStrings.tr("Belum ada akun dompet / bank. Klik 'Tambah Akun' untuk mencatat dompet atau rekening Anda.", "No wallet or bank accounts yet. Click 'Add Account' to register.", lang),
+                            fontSize = 11.sp,
+                            color = Slate500
+                        )
+                    }
+                }
+            }
+        } else {
+            items(standardAccounts, key = { it.id }) { acc ->
+                AccountCardItem(
+                    account = acc,
+                    lang = lang,
+                    onEdit = { viewModel.openTransactionDialog(TransactionDialogState.AddEditPersonalAccount(acc)) },
+                    onDelete = { viewModel.deletePersonalAccount(acc) }
+                )
+            }
         }
 
         // Section Paylater & Cicilan

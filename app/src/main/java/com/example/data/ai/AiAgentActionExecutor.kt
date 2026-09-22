@@ -233,8 +233,8 @@ class AiAgentActionExecutor(
             ?: return AiToolExecutionResult(callId, "pay_outlet_debt", false, "Warung '$warungQuery' tidak ditemukan.")
 
         val allProducts = repository.getAllProductsDirect()
-        val dummyProd = allProducts.firstOrNull()
-        val productId = dummyProd?.id ?: "PROD-01"
+        val fallbackProd = allProducts.firstOrNull()
+        val productId = fallbackProd?.id ?: "PROD-GENERAL"
 
         // Catat sebagai transaksi pelunasan khusus
         val newSaldo = (warung.saldoPiutang - nominal).coerceAtLeast(0.0)

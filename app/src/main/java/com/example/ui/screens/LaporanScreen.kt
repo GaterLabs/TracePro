@@ -68,7 +68,6 @@ fun LaporanScreen(
         AppStrings.tab4Drawers(lang),
         AppStrings.tabSupplierDeposit(lang),
         AppStrings.tabOutletReceivables(lang),
-        AppStrings.tabAssetProfit(lang),
         AppStrings.tabWriteOff(lang),
         AppStrings.tabTxHistory(lang)
     )
@@ -778,122 +777,7 @@ fun LaporanScreen(
                 }
 
                 3 -> {
-                    // 4. ASET PRIBADI & LABA REPACK
-                    val totalPribadiStock = drawers.sumOf { it.stokPribadiLayakJualPcs }
-                    val totalSortirProfit = bsSortirs.sumOf { it.estimasiProfitMurni }
-
-                    item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White,
-                                contentColor = Slate900
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Slate200))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(AppStrings.assetRepackReady(lang), color = Slate500, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                                Text(AppStrings.pcsCirculating(totalPribadiStock, lang), color = Slate900, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                                Text(AppStrings.repackProfitNote(lang), color = Slate600, fontSize = 11.sp)
-                            }
-                        }
-                    }
-
-                    item {
-                        Text(
-                            text = AppStrings.sortirHistoryTitle(lang),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Slate500,
-                            letterSpacing = 0.5.sp,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-
-                    if (bsSortirs.isEmpty()) {
-                        item {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(10.dp),
-                                colors = CardDefaults.cardColors(containerColor = Slate50),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Slate200)
-                            ) {
-                                Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                    Text(AppStrings.noSortirData(lang), color = Slate500, fontSize = 12.sp)
-                                }
-                            }
-                        }
-                    }
-
-                    itemsIndexed(bsSortirs, key = { _, it -> it.id }, contentType = { _, _ -> "report_sortir" }) { index, sortir ->
-                        val product = products.find { it.id == sortir.productId }
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White,
-                                contentColor = Slate900
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                            border = CardDefaults.outlinedCardBorder().copy(brush = SolidColor(Slate200))
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(4.dp),
-                                            color = Slate100
-                                        ) {
-                                            Text(
-                                                text = "#${index + 1}",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Slate700,
-                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                        Text(product?.nama ?: AppStrings.tr("Produk", "Product", lang), fontWeight = FontWeight.Bold, color = Slate900)
-                                    }
-                                    Text(SfaViewModel.formatDate(sortir.timestamp), fontSize = 10.sp, color = Slate500)
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("${AppStrings.tr("Retur Awal:", "Initial Return:", lang)} ${sortir.totalBsAwalPcs} Pcs", fontSize = 11.sp, color = Slate600)
-                                    Text("${AppStrings.tr("Layak Jual:", "Salable:", lang)} +${sortir.bsLayakJualPcs} Pcs", fontSize = 11.sp, color = EmeraldSuccess, fontWeight = FontWeight.Bold)
-                                    Text("${AppStrings.tr("Rusak:", "Damaged:", lang)} -${sortir.bsRusakPcs} Pcs", fontSize = 11.sp, color = RoseDanger, fontWeight = FontWeight.Bold)
-                                }
-
-                                Text(
-                                    text = "${AppStrings.cleanProfitEstimate(lang)}: ${SfaViewModel.formatRupiah(sortir.estimasiProfitMurni)}",
-                                    color = EmeraldSuccess,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                4 -> {
-                    // 5. KERUGIAN & WRITE-OFF
+                    // 4. KERUGIAN & WRITE-OFF
                     val totalWriteOffVal = writeOffs.sumOf { it.totalKerugian }
                     val totalBsRusakPcs = drawers.sumOf { it.stokPribadiRusakPcs }
 
@@ -998,8 +882,8 @@ fun LaporanScreen(
                     }
                 }
 
-                5 -> {
-                    // 6. RIWAYAT TRANSAKSI OUTLET
+                4 -> {
+                    // 5. RIWAYAT TRANSAKSI OUTLET
                     val regularTx = transactions.filter { it.warungId != "CLOSING_SALES" && it.jenis != "CLOSING_HARIAN" }
                     val titipCount = regularTx.count { it.jenis == "TITIP_BARU" }
                     val tarikCount = regularTx.count { it.jenis != "TITIP_BARU" }

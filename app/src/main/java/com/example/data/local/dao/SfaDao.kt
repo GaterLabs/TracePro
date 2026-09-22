@@ -356,4 +356,16 @@ interface SfaDao {
 
     @Query("SELECT * FROM personal_debts")
     suspend fun getAllPersonalDebtsDirect(): List<PersonalDebtEntity>
+
+    @Query("DELETE FROM personal_accounts")
+    suspend fun clearAllPersonalAccounts()
+
+    @Query("DELETE FROM personal_expenses")
+    suspend fun clearAllPersonalExpenses()
+
+    @Query("DELETE FROM personal_debts")
+    suspend fun clearAllPersonalDebts()
+
+    @Query("DELETE FROM personal_expenses WHERE accountId IN ('ACC_CASH_DOMPET', 'ACC_BANK_BCA', 'ACC_EWALLET_GOPAY', 'ACC_PAYLATER_SPAY') OR toAccountId IN ('ACC_CASH_DOMPET', 'ACC_BANK_BCA', 'ACC_EWALLET_GOPAY', 'ACC_PAYLATER_SPAY')")
+    suspend fun deleteMockPersonalExpenses()
 }

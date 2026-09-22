@@ -105,24 +105,14 @@ fun RiwayatScreen(
             list.add(HistoryItem.VisitTransaction(tx))
         }
 
-        // 2. Stock Loadings (Muat Barang Pagi)
-        dailyLoadings.forEach { load ->
-            list.add(HistoryItem.StockLoading(load))
-        }
-
-        // 3. Daily Closings
+        // 2. Daily Closings
         val closingsByDate = dailyLoadings.filter { it.statusClosing }.groupBy { it.tanggal }
         closingsByDate.forEach { (date, listItems) ->
             val maxTime = listItems.maxOfOrNull { it.createdAt } ?: now
             list.add(HistoryItem.DailyClosing(date, listItems, maxTime))
         }
 
-        // 4. BS Sortirs
-        bsSortirs.forEach { bs ->
-            list.add(HistoryItem.BsSortir(bs))
-        }
-
-        // 5. Write-offs
+        // 3. Write-offs
         writeOffs.forEach { wo ->
             list.add(HistoryItem.WriteOff(wo))
         }
@@ -212,9 +202,7 @@ fun RiwayatScreen(
         finalHistoryList.filterIsInstance<HistoryItem.VisitTransaction>().sumOf { it.entity.uangDiterima }
     }
     val totalUnitsDistributed = remember(finalHistoryList) {
-        val fromVisits = finalHistoryList.filterIsInstance<HistoryItem.VisitTransaction>().sumOf { it.entity.restockBaruPcs }
-        val fromLoading = finalHistoryList.filterIsInstance<HistoryItem.StockLoading>().sumOf { it.entity.totalPcs }
-        fromVisits + fromLoading
+        finalHistoryList.filterIsInstance<HistoryItem.VisitTransaction>().sumOf { it.entity.restockBaruPcs }
     }
     val totalBsReturnedCount = remember(finalHistoryList) {
         finalHistoryList.filterIsInstance<HistoryItem.VisitTransaction>().sumOf { it.entity.bsDitarikPcs }
@@ -384,25 +372,11 @@ fun RiwayatScreen(
                         icon = Icons.Default.Storefront
                     )
                     HistoryFilterChip(
-                        label = AppStrings.filterLoading(lang),
-                        count = countLoading,
-                        isSelected = selectedCategory == RiwayatCategoryFilter.LOADING,
-                        onClick = { selectedCategory = RiwayatCategoryFilter.LOADING },
-                        icon = Icons.Default.LocalShipping
-                    )
-                    HistoryFilterChip(
                         label = AppStrings.filterClosing(lang),
                         count = countClosing,
                         isSelected = selectedCategory == RiwayatCategoryFilter.CLOSING,
                         onClick = { selectedCategory = RiwayatCategoryFilter.CLOSING },
                         icon = Icons.Default.Assessment
-                    )
-                    HistoryFilterChip(
-                        label = AppStrings.tr("Sortir BS", "Sort BS", lang),
-                        count = countSortir,
-                        isSelected = selectedCategory == RiwayatCategoryFilter.SORTIR,
-                        onClick = { selectedCategory = RiwayatCategoryFilter.SORTIR },
-                        icon = Icons.Default.Autorenew
                     )
                     HistoryFilterChip(
                         label = AppStrings.tr("Write-Off", "Write-Off", lang),

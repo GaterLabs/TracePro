@@ -114,9 +114,9 @@ fun DrawerInventorySummary(
     stokPoolGudang: Int = 0,
     stokFresh: Int,
     stokBsBelumSortir: Int,
-    stokPribadiLayak: Int,
-    stokPribadiRusak: Int,
-    onSortirClick: () -> Unit,
+    stokPribadiLayak: Int = 0,
+    stokPribadiRusak: Int = 0,
+    onSortirClick: (() -> Unit)? = null,
     onTerimaKirimanClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     lang: String = "ID"
@@ -206,29 +206,31 @@ fun DrawerInventorySummary(
                         }
                     }
 
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Slate100,
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Slate200),
-                        modifier = Modifier.clickable { onSortirClick() }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    if (onSortirClick != null) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Slate100,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Slate200),
+                            modifier = Modifier.clickable { onSortirClick() }
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Autorenew,
-                                contentDescription = null,
-                                tint = Slate700,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Text(
-                                text = com.example.util.AppStrings.tr("Sortir", "Sort", lang),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Slate800,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Autorenew,
+                                    contentDescription = null,
+                                    tint = Slate700,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    text = com.example.util.AppStrings.tr("Sortir", "Sort", lang),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Slate800,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -258,7 +260,7 @@ fun DrawerInventorySummary(
                                 letterSpacing = 0.5.sp
                             )
                             Text(
-                                text = "Akumulasi kiriman bos (Siap dimuat)",
+                                text = "Akumulasi kiriman bos (Siap jual)",
                                 color = Slate300,
                                 fontSize = 10.sp
                             )
@@ -273,7 +275,7 @@ fun DrawerInventorySummary(
                 }
             }
 
-            // 2x2 Clean Drawer Panels with Subtle Neutral Backgrounds
+            // Clean Inventory Panels (Fresh Siap Edar & Retur BS)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -281,41 +283,19 @@ fun DrawerInventorySummary(
                 // Laci 1: Tas Motor (Fresh Harian)
                 DrawerItem(
                     label = com.example.util.AppStrings.tr("Tas Motor (Fresh)", "Vehicle Stock", lang),
-                    owner = com.example.util.AppStrings.tr("Muat Harian Siap Edar", "Daily Vehicle Load", lang),
+                    owner = com.example.util.AppStrings.tr("Stok Siap Edar", "Ready to Sell Stock", lang),
                     count = "$stokFresh Pcs",
                     dotColor = EmeraldSuccess,
                     modifier = Modifier.weight(1f)
                 )
 
-                // Laci 2: Retur Tarikan (Belum Sortir)
+                // Laci 2: Retur Tarikan (BS)
+                val totalBs = stokBsBelumSortir + stokPribadiRusak
                 DrawerItem(
-                    label = com.example.util.AppStrings.tr("Retur Tarikan (BS)", "Unsorted Returns", lang),
-                    owner = com.example.util.AppStrings.tr("Perlu Dipilah", "Needs Sorting", lang),
-                    count = "$stokBsBelumSortir Pcs",
+                    label = com.example.util.AppStrings.tr("Retur Tarikan (BS)", "Returns (BS)", lang),
+                    owner = com.example.util.AppStrings.tr("Barang BS Toko", "Damaged / Waste", lang),
+                    count = "$totalBs Pcs",
                     dotColor = AmberWarning,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Laci 3: Modal Pribadi Layak Jual
-                DrawerItem(
-                    label = com.example.util.AppStrings.tr("Rolling / Siap Putar", "Personal (Rolling)", lang),
-                    owner = com.example.util.AppStrings.tr("Tarikan Renyah / Repack", "100% Sales Margin", lang),
-                    count = "$stokPribadiLayak Pcs",
-                    dotColor = IndigoAsset,
-                    modifier = Modifier.weight(1f)
-                )
-
-                // Laci 4: Pribadi Rusak / Write-off
-                DrawerItem(
-                    label = com.example.util.AppStrings.tr("Rusak / Afkir (Tengik)", "Damaged / Waste", lang),
-                    owner = com.example.util.AppStrings.tr("Kerugian Pribadi", "Personal Loss", lang),
-                    count = "$stokPribadiRusak Pcs",
-                    dotColor = RoseDanger,
                     modifier = Modifier.weight(1f)
                 )
             }
